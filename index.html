@@ -32,7 +32,7 @@ const nameInput = document.getElementById("name-input");
 
 const LOGICAL_WIDTH = 450;
 const LOGICAL_HEIGHT = 800;
-const VERSION_STR = "v20261010.FastRespawnAsteroidFix";
+const VERSION_STR = "v20261010.ZeroBugUltimate";
 const FIREBASE_URL = "https://flywm-d0b39-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json";
 const FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', sans-serif";
 
@@ -60,6 +60,7 @@ function drawRoundRect(c, x, y, w, h, r) {
 
 function drawStarShape(c, cx, cy, spikes, outerRadius, innerRadius) {
   let rot = Math.PI / 2 * 3;
+  let x = cx, y = cy;
   let step = Math.PI / spikes;
   c.beginPath();
   c.moveTo(cx, cy - outerRadius);
@@ -606,7 +607,8 @@ function drawVectorRegularEnemy(c, subType) {
     c.shadowColor = "#00ffaa"; c.shadowBlur = 4;
     c.fillStyle = "#0c151c"; c.strokeStyle = "#00ffaa"; c.lineWidth = 1.8;
     c.beginPath();
-    c.moveTo(0, 24); c.lineTo(18, 10); c.lineTo(18, -10); c.lineTo(0, -22); c.lineTo(-18, -10); c.lineTo(-18, 10);
+    c.moveTo(0, 24); c.lineTo(18, 10); c.lineTo(18, -10); c.lineTo(0, -22); c.lineTo(-18, -10);
+    c.lineTo(-18, 10);
     c.closePath(); c.fill(); c.stroke();
     c.fillStyle = "#162835";
     c.beginPath();
@@ -632,7 +634,6 @@ function drawVectorRegularEnemy(c, subType) {
   c.restore();
 }
 
-// 돌맹이: 암흑 배경에 묻히지 않도록 밝은 마그마 코어 & 고광도 네온 외곽선 적용
 function drawVectorEliteAsteroid(c, rockId, curTime) {
   c.save();
   c.rotate(curTime * 0.45);
@@ -1366,7 +1367,7 @@ class BlackHole {
     const curR = this.baseRadius * (1.0 + Math.sin(this.life * 10) * 0.1);
     for (let ei = enemiesList.length - 1; ei >= 0; ei--) {
       const e = enemiesList[ei];
-      if (e.y < 20) continue;
+      if (e.y < 20 || e.isDead || e.hp <= 0) continue;
       if (Math.hypot(e.x - this.x, e.y - this.y) <= curR + e.radius) {
         if (e.hasShield) continue;
         safeKillEnemy(e);
@@ -1492,7 +1493,6 @@ class ExplosionFX {
   }
 }
 
-// 비행기 파괴 시 2초 슬로우 제거 및 즉시 기체 선택 화면으로 복귀 (0.4초간 빠른 파편 폭발)
 let playerDeathCinematic = {
   active: false,
   timer: 0.0,
@@ -1508,7 +1508,7 @@ function triggerPlayerCinematicDeath(hitSourceX, hitSourceY) {
   const pCol = player.pType === 4 ? "#ffd700" : (player.pType === 1 ? "#ff2244" : (player.pType === 2 ? "#00ff66" : "#00f5ff"));
   playerDeathCinematic.shards = Array.from({ length: 24 }, (_, idx) => {
     const ang = Math.random() * Math.PI * 2;
-    const spd = 4.0 + Math.random() * 6.0; // 빠른 폭발 속도
+    const spd = 4.0 + Math.random() * 6.0;
     return {
       x: player.x, y: player.y,
       vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
@@ -1545,7 +1545,6 @@ function updateAndDrawPlayerCinematic(dt) {
   });
   ctx.restore();
 
-  // 파괴 연출 완료 즉시(0.4초) 비행기 선택 화면(gameState = 0)으로 직행
   if (elapsed >= 0.4) {
     playerDeathCinematic.active = false;
     setSelectScreenMode();
@@ -1663,6 +1662,10 @@ function safeKillEnemy(e, customColor="#ffe600") {
 
   if (e.isHeavy) rockDebrisList.push(new RockDebrisFX(e.x, e.y));
   else explosions.push(new ExplosionFX(e.x, e.y, customColor));
+
+  // 파괴 즉시 배열에서 완전히 제거하여 투명 잔류 원천 방지
+  const idx = enemies.indexOf(e);
+  if (idx !== -1) enemies.splice(idx, 1);
   return true;
 }
 
@@ -1933,7 +1936,7 @@ function applyChosenSkill(code, customDuration=null) {
 }
 
 // =================================================================
-// 7. 통합 사용자 입력 리스너
+// 7. 통합 사용자 입력 리스너 (외곽 드래그 가드 & 거리 30% 축소: 84px)
 // =================================================================
 function getCanvasCoords(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
@@ -2412,7 +2415,7 @@ function safeGameLoop(now) {
       const m = homingMissiles[mi];
       for (let ei = enemies.length - 1; ei >= 0; ei--) {
         const e = enemies[ei];
-        if (e.y < 20) continue;
+        if (e.y < 20 || e.isDead || e.hp <= 0) continue;
         if (Math.hypot(m.x - e.x, m.y - e.y) < m.radius + e.radius) {
           homingMissiles.splice(mi, 1);
           applyDamageToEnemy(e, m.dmg, "MISSILE_NEEDLE");
@@ -2427,7 +2430,7 @@ function safeGameLoop(now) {
       if (!isFrozen) e.update(dt, elapsed, speedScale, widthScale);
       if (e.y > LOGICAL_HEIGHT + 40) { enemies.splice(ei, 1); continue; }
 
-      if (!isFrozen && e.y >= 20) {
+      if (!isFrozen && e.y >= 20 && !e.isDead && e.hp > 0) {
         for (let bi = bullets.length - 1; bi >= 0; bi--) {
           const b = bullets[bi];
           if (Math.hypot(b.x - e.x, b.y - e.y) < b.radius + e.radius) {
@@ -2438,8 +2441,8 @@ function safeGameLoop(now) {
         }
       }
 
-      // 화면 내부(y >= 20)로 완전히 내려온 적만 플레이어 피격 충돌 허용
-      if (player && player.isAlive && e.y >= 20 && Math.hypot(player.x - e.x, player.y - e.y) < player.radius + e.radius) {
+      // 화면 내부(y >= 20)로 완전히 내려온 실체 적만 플레이어 피격 충돌 허용
+      if (player && player.isAlive && e.y >= 20 && !e.isDead && e.hp > 0 && Math.hypot(player.x - e.x, player.y - e.y) < player.radius + e.radius) {
         if (player.shieldRemain > 0 && !e.hasShield) {
           safeKillEnemy(e);
         } else {
@@ -2531,7 +2534,6 @@ function safeGameLoop(now) {
     ctx.fillText(`TIME: ${Math.floor(elapsed)}s`, LOGICAL_WIDTH - 20, 45);
     ctx.restore();
 
-    // 스킬 렙 문자 13px (10px 대비 30% 확대)
     const baseBottomY = LOGICAL_HEIGHT - 12;
     if (player) {
       ctx.font = `bold 13px ${FONT_FAMILY}`;
