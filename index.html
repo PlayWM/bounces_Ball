@@ -32,7 +32,7 @@ const nameInput = document.getElementById("name-input");
 
 const LOGICAL_WIDTH = 450;
 const LOGICAL_HEIGHT = 800;
-const VERSION_STR = "v20261010.PrecisionAngleFix";
+const VERSION_STR = "v20261010.BossFixedLaser20";
 const FIREBASE_URL = "https://flywm-d0b39-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json";
 const FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', sans-serif";
 
@@ -208,20 +208,24 @@ function initAudio() {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       startBGMEngine();
     }
-    if (audioCtx && audioCtx.state === 'suspended' && isPageVisible) audioCtx.resume();
+    if (audioCtx && audioCtx.state === 'suspended' && isPageVisible) {
+      audioCtx.resume().catch(() => {});
+    }
   } catch(e){}
 }
 
 document.addEventListener("visibilitychange", () => {
   isPageVisible = (document.visibilityState === "visible");
-  if (!isPageVisible && audioCtx && audioCtx.state === "running") audioCtx.suspend();
-  else if (isPageVisible && audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  try {
+    if (!isPageVisible && audioCtx && audioCtx.state === "running") audioCtx.suspend();
+    else if (isPageVisible && audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  } catch(e){}
 });
 window.addEventListener("blur", () => {
-  if (audioCtx && audioCtx.state === "running") audioCtx.suspend();
+  try { if (audioCtx && audioCtx.state === "running") audioCtx.suspend(); } catch(e){}
 });
 window.addEventListener("focus", () => {
-  if (audioCtx && audioCtx.state === "suspended" && isPageVisible) audioCtx.resume();
+  try { if (audioCtx && audioCtx.state === "suspended" && isPageVisible) audioCtx.resume(); } catch(e){}
 });
 
 function playTone(freq, duration, type="sine", sweep=0, vol=0.075) {
@@ -607,7 +611,8 @@ function drawVectorRegularEnemy(c, subType) {
     c.shadowColor = "#00ffaa"; c.shadowBlur = 4;
     c.fillStyle = "#0c151c"; c.strokeStyle = "#00ffaa"; c.lineWidth = 1.8;
     c.beginPath();
-    c.moveTo(0, 24); c.lineTo(18, 10); c.lineTo(18, -10); c.lineTo(0, -22); c.lineTo(-18, -10); c.lineTo(-18, 10);
+    c.moveTo(0, 24); c.lineTo(18, 10); c.lineTo(18, -10); c.lineTo(0, -22); c.lineTo(-18, -10);
+    c.lineTo(-18, 10);
     c.closePath(); c.fill(); c.stroke();
     c.fillStyle = "#162835";
     c.beginPath();
@@ -686,23 +691,64 @@ function drawVectorEnemy(c, designId, isHeavy, rotDir, curTime) {
   else drawVectorRegularEnemy(c, (designId || 0) % 4);
 }
 
+// 보스 디테일 메카닉 그래픽 완전 복원 (장갑 패널, 플라즈마 윙, 3중 회전 코어)
 function drawVectorBoss(c, curTime) {
   c.save();
   c.scale(1.02, 1.02);
   c.lineJoin = "round";
 
-  c.fillStyle = "#120815"; c.strokeStyle = "#ff2244"; c.lineWidth = 2.6;
-  c.shadowColor = "#ff2244"; c.shadowBlur = 10;
+  // 1. 외곽 플라즈마 사이드 윙
+  c.save();
+  c.shadowColor = "#00f5ff"; c.shadowBlur = 12;
+  c.fillStyle = "rgba(0, 245, 255, 0.28)";
+  c.beginPath();
+  c.moveTo(-28, 20); c.lineTo(-65, 35); c.lineTo(-58, -25); c.lineTo(-26, -15);
+  c.closePath(); c.fill();
+  c.beginPath();
+  c.moveTo(28, 20); c.lineTo(65, 35); c.lineTo(58, -25); c.lineTo(26, -15);
+  c.closePath(); c.fill();
+  c.restore();
+
+  // 2. 메인 중장갑 선체
+  c.fillStyle = "#120815";
+  c.strokeStyle = "#ff2244";
+  c.lineWidth = 2.6;
+  c.shadowColor = "#ff2244";
+  c.shadowBlur = 10;
   c.beginPath();
   c.moveTo(0, 52); c.lineTo(28, 26); c.lineTo(56, 32); c.lineTo(50, -20);
   c.lineTo(30, -38); c.lineTo(0, -28); c.lineTo(-30, -38); c.lineTo(-50, -20);
   c.lineTo(-56, 32); c.lineTo(-28, 26);
   c.closePath(); c.fill(); c.stroke();
 
+  // 3. 내부 프레임 슬릿
+  c.fillStyle = "#1c2438";
+  c.strokeStyle = "rgba(255, 255, 255, 0.4)";
+  c.lineWidth = 1.0;
+  c.beginPath();
+  c.moveTo(0, 38); c.lineTo(20, 18); c.lineTo(40, 14); c.lineTo(24, -20);
+  c.lineTo(0, -14); c.lineTo(-24, -20); c.lineTo(-40, 14); c.lineTo(-20, 18);
+  c.closePath(); c.fill(); c.stroke();
+
+  // 4. 추진기 및 방열 포트
+  c.fillStyle = "#475569";
+  c.fillRect(-27, 28, 8, 20); c.fillRect(19, 28, 8, 20);
+  c.strokeStyle = "#ff4400";
+  c.strokeRect(-27, 28, 8, 20); c.strokeRect(19, 28, 8, 20);
+  c.fillStyle = "#ffaa00";
+  c.fillRect(-25, 45, 4, 4); c.fillRect(21, 45, 4, 4);
+
+  // 5. 3중 회전 에너지 코어
   c.save();
   c.rotate(curTime * 2.2);
   c.strokeStyle = "#ffd700"; c.lineWidth = 2.0;
   c.strokeRect(-15, -15, 30, 30);
+  c.rotate(Math.PI / 4);
+  c.strokeStyle = "#00f5ff"; c.lineWidth = 1.5;
+  c.strokeRect(-12, -12, 24, 24);
+  c.rotate(-curTime * 4.5);
+  c.strokeStyle = "#ff00bb"; c.lineWidth = 1.2;
+  c.strokeRect(-8, -8, 16, 16);
   c.restore();
 
   const coreGrad = c.createRadialGradient(0, 0, 2, 0, 0, 9);
@@ -754,7 +800,9 @@ const METEOR_THEMES = [
 class Player {
   constructor(pType, name, missileStat, powerStat, fireRateStat) {
     this.pType = pType; this.name = name;
-    this.missileStat = missileStat; this.powerStat = powerStat; this.fireRateStat = fireRateStat;
+    this.missileStat = Number(missileStat) || 1;
+    this.powerStat = Number(powerStat) || 1;
+    this.fireRateStat = Number(fireRateStat) || 1;
     this.clonePlaneTimer = 0.0; this.laserWeaponTimer = 0.0;
     this.lastLaserTime = 0.0;
     this.laserMuzzleFlashTime = 0.0;
@@ -786,7 +834,7 @@ class Player {
     let base = CONFIG.BASE_FIRE_INTERVAL;
     if (this.name === "Missile" || this.name === "Power") base *= 1.30;
     if (this.name === "Legend") base *= 0.70;
-    return Math.max(0.03, base * reduction);
+    return Math.max(0.03, (base * reduction) || 0.1);
   }
   getMissileDamage() {
     return 1.5 + (Math.max(1, this.missileStat) - 1) * 0.375;
@@ -855,6 +903,7 @@ class Player {
     const trait = this.getDominantTrait();
     let isBlackHoleShot = (trait === "POWER" && this.shotCount % 5 === 0);
 
+    // 4종 기체 탄환 생성 방어 코드 적용
     if (this.name === "Legend" || this.pType === 4) {
       bullets.push(new Bullet(px, py - 22, 0, -17, dmg, 4.5, "LEGEND"));
       bullets.push(new Bullet(px, py - 22, -1.0, -17, dmg, 4.5, "LEGEND"));
@@ -882,7 +931,7 @@ class Player {
     if (curTime - this.lastShot >= this.getFireInterval()) {
       this.lastShot = curTime;
       this.shotCount++;
-      let baseDmg = Math.max(1, this.powerStat);
+      let baseDmg = Math.max(1, this.powerStat || 1);
       if (this.pType === 1 || (this.pType === 3 && this.getDominantTrait() === "POWER")) {
         baseDmg = 1 + (this.powerStat - 1) * 2.2;
       }
@@ -1020,7 +1069,7 @@ class HomingMissile {
   }
 }
 
-// 1 & 2 & 3. 하단 10% 점진적 소멸 복원, 돌맹이/보호막적 제외, 최대 15도 제한 2단 굴절 체인 레이저
+// 레이저: 하단 20% 범위 점진적 소멸 & 첫 적에서 최대 10도 굴절 후 다음 적 향해 최대 10도 2차 굴절
 class StationaryMissileLaser {
   constructor(x, y, powerDmg, missileLv) {
     this.x = x;
@@ -1038,10 +1087,10 @@ class StationaryMissileLaser {
   calculateChainPath() {
     this.path = [{ x: this.x, y: this.startY }];
     this.hitEnemies = [];
-    // 3. 꺾이는 각도는 최대 15도로 엄격 제한
-    const maxBendRad = (15 * Math.PI) / 180;
+    // 꺾임 각도 최대 10도 제한
+    const maxBendRad = (10 * Math.PI) / 180;
 
-    // 2. 적 탐색 시 돌맹이(!e.isHeavy) 및 보호막(!e.hasShield) 제외
+    // 돌맹이(!e.isHeavy) 및 보호막(!e.hasShield) 제외
     const valids1 = enemies.filter(e => e.hp > 0 && !e.isDead && !e.isHeavy && !e.hasShield && e.y < this.startY && e.y >= 20);
     if (valids1.length === 0) {
       this.path.push({ x: this.x, y: 0 });
@@ -1051,7 +1100,7 @@ class StationaryMissileLaser {
     valids1.sort((a, b) => Math.hypot(a.x - this.x, a.y - this.startY) - Math.hypot(b.x - this.x, b.y - this.startY));
     let t1 = valids1[0];
 
-    // 3. 1차 꺾임: 최대 15도 제한 연산 (적에게 닿지 않아도 최대 각도로 꺾여 진행)
+    // 1차 꺾임: 내 비행기에서 t1을 향해 직진하다가 최대 10도로 꺾임
     let dx1 = t1.x - this.x;
     let dy1 = t1.y - this.startY;
     let maxDx1 = Math.abs(dy1) * Math.tan(maxBendRad);
@@ -1062,7 +1111,7 @@ class StationaryMissileLaser {
       this.hitEnemies.push(t1);
     }
 
-    // 2차 대상 탐색 (1차 대상 제외, 돌맹이/보호막 제외)
+    // 2차 굴절: 1차 지점에서 윗쪽의 다음 가장 가까운 적 탐색
     const valids2 = enemies.filter(e => e !== t1 && e.hp > 0 && !e.isDead && !e.isHeavy && !e.hasShield && e.y < t1.y && e.y >= 20);
     if (valids2.length === 0) {
       let dirX = (clampedX1 - this.x);
@@ -1073,7 +1122,7 @@ class StationaryMissileLaser {
     valids2.sort((a, b) => Math.hypot(a.x - clampedX1, a.y - t1.y) - Math.hypot(b.x - clampedX1, b.y - t1.y));
     let t2 = valids2[0];
 
-    // 3. 2차 꺾임: 다시 최대 15도 제한 연산
+    // 2차 꺾임: 닿지 않아도 다음 적 방향으로 최대 10도 꺾임
     let dx2 = t2.x - clampedX1;
     let dy2 = t2.y - t1.y;
     let maxDx2 = Math.abs(dy2) * Math.tan(maxBendRad);
@@ -1105,8 +1154,8 @@ class StationaryMissileLaser {
     const progress = 1.0 - (this.life / this.totalLife);
     const alpha = Math.max(0, this.life / this.totalLife);
 
-    // 1. 하단 10% 범위의 점진적 소멸 연출 복원
-    const bottomCutLength = (this.startY - this.path[1].y) * 0.10 * Math.pow(progress, 0.6);
+    // 하단 20% 범위의 점진적 소멸 연출
+    const bottomCutLength = (this.startY - this.path[1].y) * 0.20 * Math.pow(progress, 0.6);
     const renderPath = JSON.parse(JSON.stringify(this.path));
     renderPath[0].y = this.startY - bottomCutLength;
 
@@ -2238,635 +2287,636 @@ let explosions = [];
 let activeLasers = [];
 
 // ==========================================
-// 8. 렌더링 프레임 루프
+// 8. 렌더링 프레임 루프 (방어 가드 적용)
 // ==========================================
 let lastTime = performance.now();
 
 function safeGameLoop(now) {
-  const curTime = now / 1000;
-  const dt = Math.min(0.05, (now - lastTime) / 1000);
-  lastTime = now;
+  try {
+    const curTime = now / 1000;
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
 
-  drawDynamicDeepSpaceBackground(ctx, dt);
+    drawDynamicDeepSpaceBackground(ctx, dt);
 
-  if (curTime - lastCometSpawnCheck > 3.0) {
-    lastCometSpawnCheck = curTime;
-    const activeCount = comets.filter(c => c.active).length;
-    if (activeCount < 3 && Math.random() < 0.45) {
-      const freeComet = comets.find(c => !c.active);
-      if (freeComet) freeComet.spawn();
+    if (curTime - lastCometSpawnCheck > 3.0) {
+      lastCometSpawnCheck = curTime;
+      const activeCount = comets.filter(c => c.active).length;
+      if (activeCount < 3 && Math.random() < 0.45) {
+        const freeComet = comets.find(c => !c.active);
+        if (freeComet) freeComet.spawn();
+      }
     }
-  }
-  comets.forEach(c => { c.update(dt); c.draw(); });
+    comets.forEach(c => { c.update(dt); c.draw(); });
 
-  explosions.forEach(ex => ex.update(dt));
-  explosions = explosions.filter(ex => ex.life > 0);
+    explosions.forEach(ex => ex.update(dt));
+    explosions = explosions.filter(ex => ex.life > 0);
 
-  rockDebrisList.forEach(rd => rd.update(dt));
-  rockDebrisList = rockDebrisList.filter(rd => rd.life > 0);
+    rockDebrisList.forEach(rd => rd.update(dt));
+    rockDebrisList = rockDebrisList.filter(rd => rd.life > 0);
 
-  missileShadows.forEach(ms => ms.update(dt));
-  missileShadows = missileShadows.filter(ms => ms.life > 0);
+    missileShadows.forEach(ms => ms.update(dt));
+    missileShadows = missileShadows.filter(ms => ms.life > 0);
 
-  hitImpacts.forEach(hi => hi.update(dt));
-  hitImpacts = hitImpacts.filter(hi => hi.life > 0);
+    hitImpacts.forEach(hi => hi.update(dt));
+    hitImpacts = hitImpacts.filter(hi => hi.life > 0);
 
-  lightningBolts.forEach(l => l.update(dt, enemies));
-  lightningBolts = lightningBolts.filter(l => l.life > 0);
+    lightningBolts.forEach(l => l.update(dt, enemies));
+    lightningBolts = lightningBolts.filter(l => l.life > 0);
 
-  blackHoles.forEach(b => b.update(dt, enemies));
-  blackHoles = blackHoles.filter(b => b.life > 0);
+    blackHoles.forEach(b => b.update(dt, enemies));
+    blackHoles = blackHoles.filter(b => b.life > 0);
 
-  // 1. 기체 선택 화면
-  if (gameState === 0) {
-    drawGalaxyBackground(ctx, curTime);
-
-    ctx.save();
-    ctx.shadowColor = "#00f5ff";
-    ctx.shadowBlur = 7.2;
-    ctx.fillStyle = "#00f5ff";
-    ctx.font = `bold 28px ${FONT_FAMILY}`;
-    ctx.textAlign = "center";
-    ctx.fillText("NEON FLIGHT: OVERDRIVE", LOGICAL_WIDTH / 2, 60);
-    ctx.restore();
-
-    ctx.fillStyle = "#a5c0e0";
-    ctx.font = `13px ${FONT_FAMILY}`;
-    ctx.textAlign = "center";
-    ctx.fillText("CHOOSE YOUR FIGHTER", LOGICAL_WIDTH / 2, 95);
-
-    if (curTime - lastRandomSwitch >= 0.5) {
-      lastRandomSwitch = curTime;
-      randomCardDesign = Math.floor(Math.random() * 4);
-    }
-    if (curTime - lastRollTime >= 0.175) {
-      lastRollTime = curTime;
-      const bStats = generateBalancedStats();
-      rollP = bStats.p; rollM = bStats.m; rollR = bStats.r;
-    }
-
-    const cards = [
-      { name: "MISSILE", p: 1, m: 5, r: 1, bdr: "#00f5ff", y: 165, img: 0, sub: "HOMING MISSILE SPECIALIST" },
-      { name: "POWER", p: 5, m: 1, r: 1, bdr: "#ff2244", y: 250, img: 1, sub: "BLACK HOLE & HEAVY CANNON" },
-      { name: "TWIN", p: 1, m: 1, r: 5, bdr: "#00ff66", y: 335, img: 2, sub: "LIGHTNING ORB & RAPID FIRE" },
-      { name: "RANDOM", p: rollP, m: rollM, r: rollR, bdr: "#d000ff", y: 420, img: randomCardDesign, sub: "10% CHANCE OF LEGEND SHIP" }
-    ];
-
-    cards.forEach(c => {
-      ctx.save();
-      ctx.fillStyle = "rgba(12, 18, 38, 0.78)";
-      drawRoundRect(ctx, 35, c.y, LOGICAL_WIDTH - 70, 75, 12);
-      ctx.fill();
-
-      ctx.shadowColor = c.bdr;
-      ctx.shadowBlur = 5;
-      ctx.strokeStyle = c.bdr;
-      ctx.lineWidth = 1.8;
-      ctx.stroke();
+    // 1. 기체 선택 화면
+    if (gameState === 0) {
+      drawGalaxyBackground(ctx, curTime);
 
       ctx.save();
-      ctx.translate(75, c.y + 38);
-      drawVectorPlayer(ctx, c.img, c.bdr, 0.9, Math.sin(curTime * 10) * 3);
-      ctx.restore();
-
-      ctx.textAlign = "left";
-      ctx.fillStyle = "#fff";
-      ctx.font = `bold 17px ${FONT_FAMILY}`;
-      ctx.fillText(c.name, 115, c.y + 20);
-
-      ctx.font = `bold 10px ${FONT_FAMILY}`;
+      ctx.shadowColor = "#00f5ff";
+      ctx.shadowBlur = 7.2;
       ctx.fillStyle = "#00f5ff";
-      ctx.fillText(c.sub, 115, c.y + 35);
-
-      const maxVal = Math.max(c.p, c.m, c.r);
-      const isMaxP = (c.p === maxVal);
-      const isMaxM = (c.m === maxVal && !isMaxP);
-      const isMaxR = (c.r === maxVal && !isMaxP && !isMaxM);
-
-      let xOffset = 115;
-      const renderStat = (label, val, isHigh) => {
-        ctx.font = isHigh ? `bold 14px ${FONT_FAMILY}` : `12px ${FONT_FAMILY}`;
-        ctx.fillStyle = isHigh ? "#ffe600" : "#a0b0c8";
-        const txtStr = `${label} ${val}`;
-        ctx.fillText(txtStr, xOffset, c.y + 58);
-        xOffset += ctx.measureText(txtStr).width + 8;
-        ctx.font = `12px ${FONT_FAMILY}`;
-        ctx.fillStyle = "#4a5a70";
-        ctx.fillText("|", xOffset, c.y + 58);
-        xOffset += 10;
-      };
-
-      renderStat("PWR", c.p, isMaxP);
-      renderStat("MSL", c.m, isMaxM);
-      ctx.font = isMaxR ? `bold 14px ${FONT_FAMILY}` : `12px ${FONT_FAMILY}`;
-      ctx.fillStyle = isMaxR ? "#ffe600" : "#a0b0c8";
-      ctx.fillText(`RATE ${c.r}`, xOffset, c.y + 58);
+      ctx.font = `bold 28px ${FONT_FAMILY}`;
+      ctx.textAlign = "center";
+      ctx.fillText("NEON FLIGHT: OVERDRIVE", LOGICAL_WIDTH / 2, 60);
       ctx.restore();
-    });
 
-    const t10Y = 505;
-    ctx.save();
-    ctx.fillStyle = "rgba(10, 15, 32, 0.85)";
-    drawRoundRect(ctx, 35, t10Y, LOGICAL_WIDTH - 70, 185, 10);
-    ctx.fill();
-    ctx.strokeStyle = "#00f5ff";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+      ctx.fillStyle = "#a5c0e0";
+      ctx.font = `13px ${FONT_FAMILY}`;
+      ctx.textAlign = "center";
+      ctx.fillText("CHOOSE YOUR FIGHTER", LOGICAL_WIDTH / 2, 95);
 
-    ctx.fillStyle = "#00f5ff";
-    ctx.font = `bold 13px ${FONT_FAMILY}`;
-    ctx.textAlign = "center";
-    ctx.fillText("★ GLOBAL TOP 10 PLAYERS ★", LOGICAL_WIDTH / 2, t10Y + 18);
+      if (curTime - lastRandomSwitch >= 0.5) {
+        lastRandomSwitch = curTime;
+        randomCardDesign = Math.floor(Math.random() * 4);
+      }
+      if (curTime - lastRollTime >= 0.175) {
+        lastRollTime = curTime;
+        const bStats = generateBalancedStats();
+        rollP = bStats.p; rollM = bStats.m; rollR = bStats.r;
+      }
 
-    ctx.font = `bold 12px ${FONT_FAMILY}`;
-    if (top10List.length === 0) {
-      ctx.fillStyle = "#a0b0c8";
-      ctx.fillText("WAITING FOR RECORDS...", LOGICAL_WIDTH / 2, t10Y + 90);
-    } else {
-      top10List.slice(0, 10).forEach((item, idx) => {
-        const rowY = Math.round(t10Y + 34 + idx * 15);
+      const cards = [
+        { name: "MISSILE", p: 1, m: 5, r: 1, bdr: "#00f5ff", y: 165, img: 0, sub: "HOMING MISSILE SPECIALIST" },
+        { name: "POWER", p: 5, m: 1, r: 1, bdr: "#ff2244", y: 250, img: 1, sub: "BLACK HOLE & HEAVY CANNON" },
+        { name: "TWIN", p: 1, m: 1, r: 5, bdr: "#00ff66", y: 335, img: 2, sub: "LIGHTNING ORB & RAPID FIRE" },
+        { name: "RANDOM", p: rollP, m: rollM, r: rollR, bdr: "#d000ff", y: 420, img: randomCardDesign, sub: "10% CHANCE OF LEGEND SHIP" }
+      ];
+
+      cards.forEach(c => {
+        ctx.save();
+        ctx.fillStyle = "rgba(12, 18, 38, 0.78)";
+        drawRoundRect(ctx, 35, c.y, LOGICAL_WIDTH - 70, 75, 12);
+        ctx.fill();
+
+        ctx.shadowColor = c.bdr;
+        ctx.shadowBlur = 5;
+        ctx.strokeStyle = c.bdr;
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+
+        ctx.save();
+        ctx.translate(75, c.y + 38);
+        drawVectorPlayer(ctx, c.img, c.bdr, 0.9, Math.sin(curTime * 10) * 3);
+        ctx.restore();
+
         ctx.textAlign = "left";
-        ctx.fillStyle = idx === 0 ? "#ffe600" : (idx < 3 ? "#00f5ff" : "#ffffff");
-        ctx.fillText(`${idx + 1}. [${item.country}] ${item.name}`, 44, rowY);
-        ctx.textAlign = "right";
-        ctx.fillText(`${item.score} PTS`, LOGICAL_WIDTH - 44, rowY);
+        ctx.fillStyle = "#fff";
+        ctx.font = `bold 17px ${FONT_FAMILY}`;
+        ctx.fillText(c.name, 115, c.y + 20);
+
+        ctx.font = `bold 10px ${FONT_FAMILY}`;
+        ctx.fillStyle = "#00f5ff";
+        ctx.fillText(c.sub, 115, c.y + 35);
+
+        const maxVal = Math.max(c.p, c.m, c.r);
+        const isMaxP = (c.p === maxVal);
+        const isMaxM = (c.m === maxVal && !isMaxP);
+        const isMaxR = (c.r === maxVal && !isMaxP && !isMaxM);
+
+        let xOffset = 115;
+        const renderStat = (label, val, isHigh) => {
+          ctx.font = isHigh ? `bold 14px ${FONT_FAMILY}` : `12px ${FONT_FAMILY}`;
+          ctx.fillStyle = isHigh ? "#ffe600" : "#a0b0c8";
+          const txtStr = `${label} ${val}`;
+          ctx.fillText(txtStr, xOffset, c.y + 58);
+          xOffset += ctx.measureText(txtStr).width + 8;
+          ctx.font = `12px ${FONT_FAMILY}`;
+          ctx.fillStyle = "#4a5a70";
+          ctx.fillText("|", xOffset, c.y + 58);
+          xOffset += 10;
+        };
+
+        renderStat("PWR", c.p, isMaxP);
+        renderStat("MSL", c.m, isMaxM);
+        ctx.font = isMaxR ? `bold 14px ${FONT_FAMILY}` : `12px ${FONT_FAMILY}`;
+        ctx.fillStyle = isMaxR ? "#ffe600" : "#a0b0c8";
+        ctx.fillText(`RATE ${c.r}`, xOffset, c.y + 58);
+        ctx.restore();
       });
-    }
-    ctx.restore();
 
-    ctx.textAlign = "left";
-    ctx.fillStyle = "#70809b";
-    ctx.font = `bold 11px ${FONT_FAMILY}`;
-    ctx.fillText(VERSION_STR, 10, LOGICAL_HEIGHT - 12);
-
-  } else if (gameState === 4) {
-    const elapsedShowcase = curTime - legendShowcaseStartTime;
-    const remainSec = Math.max(0, (3.0 - elapsedShowcase).toFixed(1));
-    const cx = LOGICAL_WIDTH / 2;
-    const cy = LOGICAL_HEIGHT / 2 - 40;
-
-    ctx.save();
-    ctx.translate(cx, cy);
-    drawVectorPlayer(ctx, 4, "#ffd700", 2.2);
-    ctx.restore();
-
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#ffd700";
-    ctx.font = `bold 20px ${FONT_FAMILY}`;
-    ctx.fillText("CONGRATULATIONS!", cx, cy + 100);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = `bold 16px ${FONT_FAMILY}`;
-    ctx.fillText("LEGEND SHIP UNLOCKED!", cx, cy + 130);
-    ctx.fillStyle = "#00f5ff";
-    ctx.font = `14px ${FONT_FAMILY}`;
-    ctx.fillText(`GAME STARTS IN ${remainSec}s`, cx, cy + 170);
-
-    if (elapsedShowcase >= 3.0) initBattleState();
-
-  } else if (gameState === 1) { // 2. 인게임 전투
-    const isFrozen = (hedgehogLauncher.timeStopTimer > 0);
-    if (isFrozen) {
-      hedgehogLauncher.timeStopTimer = Math.max(0, hedgehogLauncher.timeStopTimer - dt);
-    } else {
-      inGameElapsedTime += dt;
-    }
-    const elapsed = inGameElapsedTime;
-
-    if (player && player.isAlive && !isFrozen && !playerDeathCinematic.active) {
-      let kx = 0, ky = 0;
-      if (keysPressed["arrowleft"] || keysPressed["a"] || keysPressed["keya"]) kx -= 1;
-      if (keysPressed["arrowright"] || keysPressed["d"] || keysPressed["keyd"]) kx += 1;
-      if (keysPressed["arrowup"] || keysPressed["w"] || keysPressed["keyw"]) ky -= 1;
-      if (keysPressed["arrowdown"] || keysPressed["s"] || keysPressed["keys"]) ky -= 1;
-
-      if (kx !== 0 || ky !== 0) {
-        const moveDist = CONFIG.BASE_PLAYER_SPEED * 60 * dt;
-        player.targetX = Math.max(player.radius + 10, Math.min(LOGICAL_WIDTH - player.radius - 10, player.targetX + kx * moveDist));
-        player.targetY = Math.max(player.radius + 10, Math.min(LOGICAL_HEIGHT - player.radius - 10, player.targetY + ky * moveDist));
-      }
-    }
-
-    if (!isNukingTransition && !isFrozen && player && player.isAlive && !playerDeathCinematic.active) {
-      player.update(dt, enemies, lightningBolts, bullets);
-      player.shoot(curTime, bullets);
-    }
-
-    if (meteorManager && player && !isFrozen) {
-      meteorManager.update(dt, elapsed, player, bullets, enemies);
-    }
-
-    let speedScale = 0.5;
-    if (elapsed < 60.0) {
-      speedScale = 0.5;
-    } else {
-      speedScale = Math.min(1.0, 0.5 + ((elapsed - 60.0) / 90.0) * 0.5);
-    }
-    let widthScale = speedScale;
-    const hpScale = (elapsed < 60.0) ? 0.7 : 1.0;
-
-    let spawnInterval = (elapsed < 60.0) ? (CONFIG.MAX_SPAWN_INTERVAL * 1.8) : Math.max(CONFIG.MIN_SPAWN_INTERVAL, CONFIG.MAX_SPAWN_INTERVAL * Math.pow(1 / 1.10, Math.floor((elapsed - 60.0) / 20.0)));
-
-    if (!isNukingTransition && !isFrozen && elapsed - lastSpawnTime > spawnInterval) {
-      lastSpawnTime = elapsed;
-      let hpMultiplier = 1.0;
-      if (elapsed >= 60.0) hpMultiplier = Math.pow(1.3, Math.floor((elapsed - 60.0) / 20.0));
-      const calculatedHp = Math.max(1, Math.round((2 + Math.random() * 3) * hpScale * hpMultiplier));
-
-      let shieldProb = 0.01;
-      if (elapsed >= 60.0 && elapsed < 300.0) shieldProb = 0.03;
-      else if (elapsed >= 300.0) shieldProb = Math.min(0.10, 0.03 * Math.pow(1.10, Math.floor((elapsed - 300.0) / 30.0)));
-
-      enemies.push(new Enemy(calculatedHp, CONFIG.BASE_ENEMY_SPEED + Math.min(1.0, elapsed / 180.0) * 3.5, Math.floor(Math.random() * 4), Math.random() < shieldProb, false));
-
-      if (elapsed >= 60.0 && elapsed - lastHeavySpawnTime >= 60.0) {
-        const currentHeavyCount = enemies.filter(e => e.isHeavy && !e.isDead && e.hp > 0).length;
-        if (currentHeavyCount === 0) {
-          lastHeavySpawnTime = elapsed;
-          const heavyHpMultiplier = Math.pow(1.10, Math.floor((elapsed - 60.0) / 30.0));
-          const finalHeavyHp = Math.round(calculatedHp * 10 * heavyHpMultiplier);
-          const heavySpeed = CONFIG.BASE_ENEMY_SPEED * 0.50;
-          enemies.push(new Enemy(finalHeavyHp, heavySpeed, Math.floor(Math.random() * 4), false, true));
-        }
-      }
-    }
-
-    if (!currentBoss && elapsed >= nextBossTargetTime && !isFrozen) {
-      currentBoss = new BossEnemy();
-      nextBossTargetTime += 90.0;
-    }
-    if (currentBoss && !isFrozen) currentBoss.update(dt, curTime, bossMissiles);
-
-    for (let i = bossDropItems.length - 1; i >= 0; i--) {
-      const it = bossDropItems[i];
-      if (!isFrozen) it.update(dt);
-      if (it.y > LOGICAL_HEIGHT + 30) { bossDropItems.splice(i, 1); continue; }
-      if (player && player.isAlive && Math.hypot(player.x - it.x, player.y - it.y) < player.radius + it.radius) {
-        const itemType = it.getType(curTime);
-        if (itemType === "P") player.powerStat++;
-        else if (itemType === "M") player.missileStat++;
-        else if (itemType === "D") player.fireRateStat++;
-        bossDropItems.splice(i, 1);
-        playTone(784, 0.2, "triangle", 150, 0.12);
-      }
-    }
-
-    if (!isFrozen) {
-      bullets.forEach(b => b.update(dt));
-      bullets = bullets.filter(b => b.y > -20 && b.x > -20 && b.x < LOGICAL_WIDTH + 20);
-
-      homingMissiles.forEach(m => m.update(dt, enemies));
-      homingMissiles = homingMissiles.filter(m => m.life > 0 && m.y > -20 && m.x > -20 && m.x < LOGICAL_WIDTH + 20);
-
-      stationaryLasers.forEach(sl => sl.update(dt, enemies));
-      stationaryLasers = stationaryLasers.filter(sl => sl.life > 0);
-
-      bossMissiles.forEach(m => m.update(dt));
-      bossMissiles = bossMissiles.filter(m => m.y < LOGICAL_HEIGHT + 30);
-    }
-
-    // 유도 미사일 충돌 판정 (화면 바깥 y < 20 제외)
-    for (let mi = homingMissiles.length - 1; mi >= 0; mi--) {
-      const m = homingMissiles[mi];
-      for (let ei = enemies.length - 1; ei >= 0; ei--) {
-        const e = enemies[ei];
-        if (e.y < 20 || e.isDead || e.hp <= 0) continue;
-        if (Math.hypot(m.x - e.x, m.y - e.y) < m.radius + e.radius) {
-          homingMissiles.splice(mi, 1);
-          applyDamageToEnemy(e, m.dmg, "MISSILE_NEEDLE");
-          break;
-        }
-      }
-    }
-
-    // 일반 탄환 충돌 판정 (화면 바깥 y < 20 제외)
-    for (let ei = enemies.length - 1; ei >= 0; ei--) {
-      const e = enemies[ei];
-      if (!isFrozen) e.update(dt, elapsed, speedScale, widthScale);
-      if (e.y > LOGICAL_HEIGHT + 40) { enemies.splice(ei, 1); continue; }
-
-      if (!isFrozen && e.y >= 20 && !e.isDead && e.hp > 0) {
-        for (let bi = bullets.length - 1; bi >= 0; bi--) {
-          const b = bullets[bi];
-          if (Math.hypot(b.x - e.x, b.y - e.y) < b.radius + e.radius) {
-            bullets.splice(bi, 1);
-            applyDamageToEnemy(e, b.dmg, b.bulletType);
-            break;
-          }
-        }
-      }
-
-      // 화면 내부(y >= 20)로 완전히 내려온 실체 적만 플레이어 피격 충돌 허용
-      if (player && player.isAlive && e.y >= 20 && !e.isDead && e.hp > 0 && Math.hypot(player.x - e.x, player.y - e.y) < player.radius + e.radius) {
-        if (player.shieldRemain > 0 && !e.hasShield) {
-          safeKillEnemy(e);
-        } else {
-          triggerPlayerCinematicDeath(e.x, e.y);
-          break;
-        }
-      }
-    }
-
-    if (currentBoss && !isFrozen) {
-      for (let bi = bullets.length - 1; bi >= 0; bi--) {
-        const b = bullets[bi];
-        if (Math.hypot(b.x - currentBoss.x, b.y - currentBoss.y) < b.radius + currentBoss.radius) {
-          hitImpacts.push(new BulletHitImpactFX(b.x, b.y, b.bulletType));
-          bullets.splice(bi, 1);
-          currentBoss.hp--;
-          if (currentBoss.hp <= 0) {
-            score += 100;
-            bossDropItems.push(new BossDropItem(currentBoss.x, currentBoss.y));
-            currentBoss = null;
-            playExplosionSound();
-            break;
-          }
-        }
-      }
-    }
-
-    const gPct = Math.min(1.0, skillGauge / CONFIG.MAX_SKILL_GAUGE);
-    if (gPct >= 0.85 && !hedgehogLauncher.active && !isNukingTransition) {
-      hedgehogLauncher.active = true;
-      hedgehogLauncher.x = LOGICAL_WIDTH - 85;
-      hedgehogLauncher.y = LOGICAL_HEIGHT - 65;
-    }
-    if (skillGauge >= CONFIG.MAX_SKILL_GAUGE && !isNukingTransition) {
-      skillGauge = 0.0;
-      triggerSlotSequence();
-    }
-
-    missileShadows.forEach(ms => ms.draw());
-    bullets.forEach(b => b.draw());
-    homingMissiles.forEach(m => m.draw());
-    stationaryLasers.forEach(sl => sl.draw());
-    hitImpacts.forEach(hi => hi.draw());
-    bossMissiles.forEach(m => m.draw());
-    bossDropItems.forEach(it => it.draw(curTime));
-    enemies.filter(e => !e.isDead && e.hp > 0).forEach(e => e.draw(curTime));
-    blackHoles.forEach(b => b.draw());
-    lightningBolts.forEach(l => l.draw());
-    if (currentBoss) currentBoss.draw(curTime);
-    if (meteorManager) {
-      meteorManager.drawMeteors();
-      meteorManager.drawWarning();
-    }
-    rockDebrisList.forEach(rd => rd.draw());
-    explosions.forEach(ex => ex.draw());
-
-    if (player && player.isAlive) player.draw(curTime);
-
-    updateAndDrawPlayerCinematic(dt);
-
-    drawHedgehogLauncher(ctx, curTime);
-
-    nukeBeamBeams = nukeBeamBeams.filter(b => curTime - b.startTime < b.duration);
-    nukeBeamBeams.forEach(b => {
+      const t10Y = 505;
       ctx.save();
-      ctx.strokeStyle = b.color;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(b.sx, b.sy); ctx.lineTo(b.tx, b.ty);
+      ctx.fillStyle = "rgba(10, 15, 32, 0.85)";
+      drawRoundRect(ctx, 35, t10Y, LOGICAL_WIDTH - 70, 185, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#00f5ff";
+      ctx.lineWidth = 1.5;
       ctx.stroke();
-      ctx.restore();
-    });
-
-    if (hedgehogLauncher.flashAlpha > 0) {
-      ctx.save();
-      ctx.fillStyle = `rgba(255, 255, 255, ${hedgehogLauncher.flashAlpha})`;
-      ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-      ctx.restore();
-      hedgehogLauncher.flashAlpha = Math.max(0, hedgehogLauncher.flashAlpha - (dt / 0.3));
-    }
-
-    ctx.save();
-    ctx.textAlign = "right";
-    ctx.fillStyle = "#ffffff";
-    ctx.font = `bold 15px ${FONT_FAMILY}`;
-    ctx.fillText(`SCORE: ${score}`, LOGICAL_WIDTH - 20, 25);
-    ctx.fillStyle = "#ffe600";
-    ctx.font = `13px ${FONT_FAMILY}`;
-    ctx.fillText(`TIME: ${Math.floor(elapsed)}s`, LOGICAL_WIDTH - 20, 45);
-    ctx.restore();
-
-    const baseBottomY = LOGICAL_HEIGHT - 12;
-    if (player) {
-      ctx.font = `bold 13px ${FONT_FAMILY}`;
-      ctx.textAlign = "left";
-
-      ctx.fillStyle = "#ff007f";
-      ctx.fillText(`POWER   : Lv.${Math.round(player.powerStat)}`, 14, baseBottomY - 32);
 
       ctx.fillStyle = "#00f5ff";
-      ctx.fillText(`MISSILE : Lv.${Math.round(player.missileStat)}`, 14, baseBottomY - 17);
+      ctx.font = `bold 13px ${FONT_FAMILY}`;
+      ctx.textAlign = "center";
+      ctx.fillText("★ GLOBAL TOP 10 PLAYERS ★", LOGICAL_WIDTH / 2, t10Y + 18);
 
-      ctx.fillStyle = "#ffe600";
-      ctx.fillText(`RATE    : Lv.${Math.round(player.fireRateStat)}`, 14, baseBottomY - 2);
-    }
+      ctx.font = `bold 12px ${FONT_FAMILY}`;
+      if (top10List.length === 0) {
+        ctx.fillStyle = "#a0b0c8";
+        ctx.fillText("WAITING FOR RECORDS...", LOGICAL_WIDTH / 2, t10Y + 90);
+      } else {
+        top10List.slice(0, 10).forEach((item, idx) => {
+          const rowY = Math.round(t10Y + 34 + idx * 15);
+          ctx.textAlign = "left";
+          ctx.fillStyle = idx === 0 ? "#ffe600" : (idx < 3 ? "#00f5ff" : "#ffffff");
+          ctx.fillText(`${idx + 1}. [${item.country}] ${item.name}`, 44, rowY);
+          ctx.textAlign = "right";
+          ctx.fillText(`${item.score} PTS`, LOGICAL_WIDTH - 44, rowY);
+        });
+      }
+      ctx.restore();
 
-    const gw = 130, gh = 16, gx = LOGICAL_WIDTH - gw - 20, gy = LOGICAL_HEIGHT - 35;
-    ctx.fillStyle = "#1e2438";
-    drawRoundRect(ctx, gx, gy, gw, gh, 4);
-    ctx.fill();
-    ctx.fillStyle = "#00f5ff";
-    drawRoundRect(ctx, gx, gy, gw * gPct, gh, 4);
-    ctx.fill();
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#70809b";
+      ctx.font = `bold 11px ${FONT_FAMILY}`;
+      ctx.fillText(VERSION_STR, 10, LOGICAL_HEIGHT - 12);
 
-    ctx.textAlign = "left";
-    ctx.fillStyle = "#00f5ff";
-    ctx.font = `bold 12px ${FONT_FAMILY}`;
-    ctx.fillText("SKILL GAUGE", gx, gy - 6);
+    } else if (gameState === 4) {
+      const elapsedShowcase = curTime - legendShowcaseStartTime;
+      const remainSec = Math.max(0, (3.0 - elapsedShowcase).toFixed(1));
+      const cx = LOGICAL_WIDTH / 2;
+      const cy = LOGICAL_HEIGHT / 2 - 40;
 
-  } else if (gameState === 2) {
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#00f5ff";
-    ctx.font = `bold 24px ${FONT_FAMILY}`;
-    ctx.fillText("UPGRADE SELECTION", LOGICAL_WIDTH / 2, 44);
-
-    ctx.fillStyle = "#e2e8f0";
-    ctx.font = `bold 13px ${FONT_FAMILY}`;
-    ctx.shadowColor = "#00f5ff";
-    ctx.shadowBlur = 4;
-    ctx.fillText("★ [ GUARANTEED : 100% INSTANT UPGRADE ] ★", LOGICAL_WIDTH / 2, 74);
-    ctx.shadowBlur = 0;
-
-    const cards = [
-      { code: "POWER_UP", title: "POWER UP + 1", desc: `Current Lv.${player ? Math.round(player.powerStat) : 1}`, col: "#00f5ff", subCol: "#ff0080", x: 35, y: 95, w: 175, h: 80 },
-      { code: "MISSILE_UP", title: "MISSILE + 1", desc: `Current Lv.${player ? Math.round(player.missileStat) : 1}`, col: "#00f5ff", subCol: "#00f5ff", x: 240, y: 95, w: 175, h: 80 },
-      { code: "FIRE_RATE", title: "FIRE RATE + 1", desc: `Current Lv.${player ? Math.round(player.fireRateStat) : 1}`, col: "#64aaff", subCol: "#ffe600", x: 35, y: 195, w: 175, h: 80 },
-      { code: "CLONE_SHIP", title: "CLONE SHIP", desc: "1 ~ 30s RANDOM", col: "#78a0ff", subCol: "#78a0ff", x: 240, y: 195, w: 175, h: 80, active: player && player.clonePlaneTimer > 0 },
-      { code: "LASER_WEAPON", title: "LASER GUN", desc: "1 ~ 30s RANDOM", col: "#32ff78", subCol: "#00f5ff", x: 35, y: 295, w: 175, h: 80, active: player && player.laserWeaponTimer > 0 },
-      { code: "SHIELD", title: "ENERGY SHIELD", desc: "1 ~ 30s RANDOM", col: "#32ff78", subCol: "#32ff78", x: 240, y: 295, w: 175, h: 80, active: player && player.shieldRemain > 0 }
-    ];
-
-    cards.forEach((c) => {
       ctx.save();
-      if (c.active) ctx.globalAlpha = 0.50;
-
-      ctx.fillStyle = "rgba(10, 16, 35, 0.85)";
-      drawRoundRect(ctx, c.x, c.y, c.w, c.h, 10);
-      ctx.fill();
-      ctx.strokeStyle = c.col;
-      ctx.lineWidth = 1.8;
-      ctx.stroke();
+      ctx.translate(cx, cy);
+      drawVectorPlayer(ctx, 4, "#ffd700", 2.2);
+      ctx.restore();
 
       ctx.textAlign = "center";
+      ctx.fillStyle = "#ffd700";
+      ctx.font = `bold 20px ${FONT_FAMILY}`;
+      ctx.fillText("CONGRATULATIONS!", cx, cy + 100);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `bold 16px ${FONT_FAMILY}`;
+      ctx.fillText("LEGEND SHIP UNLOCKED!", cx, cy + 130);
+      ctx.fillStyle = "#00f5ff";
+      ctx.font = `14px ${FONT_FAMILY}`;
+      ctx.fillText(`GAME STARTS IN ${remainSec}s`, cx, cy + 170);
+
+      if (elapsedShowcase >= 3.0) initBattleState();
+
+    } else if (gameState === 1) { // 2. 인게임 전투
+      const isFrozen = (hedgehogLauncher.timeStopTimer > 0);
+      if (isFrozen) {
+        hedgehogLauncher.timeStopTimer = Math.max(0, hedgehogLauncher.timeStopTimer - dt);
+      } else {
+        inGameElapsedTime += dt;
+      }
+      const elapsed = inGameElapsedTime;
+
+      if (player && player.isAlive && !isFrozen && !playerDeathCinematic.active) {
+        let kx = 0, ky = 0;
+        if (keysPressed["arrowleft"] || keysPressed["a"] || keysPressed["keya"]) kx -= 1;
+        if (keysPressed["arrowright"] || keysPressed["d"] || keysPressed["keyd"]) kx += 1;
+        if (keysPressed["arrowup"] || keysPressed["w"] || keysPressed["keyw"]) ky -= 1;
+        if (keysPressed["arrowdown"] || keysPressed["s"] || keysPressed["keys"]) ky += 1;
+
+        if (kx !== 0 || ky !== 0) {
+          const moveDist = CONFIG.BASE_PLAYER_SPEED * 60 * dt;
+          player.targetX = Math.max(player.radius + 10, Math.min(LOGICAL_WIDTH - player.radius - 10, player.targetX + kx * moveDist));
+          player.targetY = Math.max(player.radius + 10, Math.min(LOGICAL_HEIGHT - player.radius - 10, player.targetY + ky * moveDist));
+        }
+      }
+
+      if (!isNukingTransition && !isFrozen && player && player.isAlive && !playerDeathCinematic.active) {
+        player.update(dt, enemies, lightningBolts, bullets);
+        player.shoot(curTime, bullets);
+      }
+
+      if (meteorManager && player && !isFrozen) {
+        meteorManager.update(dt, elapsed, player, bullets, enemies);
+      }
+
+      let speedScale = 0.5;
+      if (elapsed < 60.0) {
+        speedScale = 0.5;
+      } else {
+        speedScale = Math.min(1.0, 0.5 + ((elapsed - 60.0) / 90.0) * 0.5);
+      }
+      let widthScale = speedScale;
+      const hpScale = (elapsed < 60.0) ? 0.7 : 1.0;
+
+      let spawnInterval = (elapsed < 60.0) ? (CONFIG.MAX_SPAWN_INTERVAL * 1.8) : Math.max(CONFIG.MIN_SPAWN_INTERVAL, CONFIG.MAX_SPAWN_INTERVAL * Math.pow(1 / 1.10, Math.floor((elapsed - 60.0) / 20.0)));
+
+      if (!isNukingTransition && !isFrozen && elapsed - lastSpawnTime > spawnInterval) {
+        lastSpawnTime = elapsed;
+        let hpMultiplier = 1.0;
+        if (elapsed >= 60.0) hpMultiplier = Math.pow(1.3, Math.floor((elapsed - 60.0) / 20.0));
+        const calculatedHp = Math.max(1, Math.round((2 + Math.random() * 3) * hpScale * hpMultiplier));
+
+        let shieldProb = 0.01;
+        if (elapsed >= 60.0 && elapsed < 300.0) shieldProb = 0.03;
+        else if (elapsed >= 300.0) shieldProb = Math.min(0.10, 0.03 * Math.pow(1.10, Math.floor((elapsed - 300.0) / 30.0)));
+
+        enemies.push(new Enemy(calculatedHp, CONFIG.BASE_ENEMY_SPEED + Math.min(1.0, elapsed / 180.0) * 3.5, Math.floor(Math.random() * 4), Math.random() < shieldProb, false));
+
+        if (elapsed >= 60.0 && elapsed - lastHeavySpawnTime >= 60.0) {
+          const currentHeavyCount = enemies.filter(e => e.isHeavy && !e.isDead && e.hp > 0).length;
+          if (currentHeavyCount === 0) {
+            lastHeavySpawnTime = elapsed;
+            const heavyHpMultiplier = Math.pow(1.10, Math.floor((elapsed - 60.0) / 30.0));
+            const finalHeavyHp = Math.round(calculatedHp * 10 * heavyHpMultiplier);
+            const heavySpeed = CONFIG.BASE_ENEMY_SPEED * 0.50;
+            enemies.push(new Enemy(finalHeavyHp, heavySpeed, Math.floor(Math.random() * 4), false, true));
+          }
+        }
+      }
+
+      if (!currentBoss && elapsed >= nextBossTargetTime && !isFrozen) {
+        currentBoss = new BossEnemy();
+        nextBossTargetTime += 90.0;
+      }
+      if (currentBoss && !isFrozen) currentBoss.update(dt, curTime, bossMissiles);
+
+      for (let i = bossDropItems.length - 1; i >= 0; i--) {
+        const it = bossDropItems[i];
+        if (!isFrozen) it.update(dt);
+        if (it.y > LOGICAL_HEIGHT + 30) { bossDropItems.splice(i, 1); continue; }
+        if (player && player.isAlive && Math.hypot(player.x - it.x, player.y - it.y) < player.radius + it.radius) {
+          const itemType = it.getType(curTime);
+          if (itemType === "P") player.powerStat++;
+          else if (itemType === "M") player.missileStat++;
+          else if (itemType === "D") player.fireRateStat++;
+          bossDropItems.splice(i, 1);
+          playTone(784, 0.2, "triangle", 150, 0.12);
+        }
+      }
+
+      if (!isFrozen) {
+        bullets.forEach(b => b.update(dt));
+        bullets = bullets.filter(b => b.y > -20 && b.x > -20 && b.x < LOGICAL_WIDTH + 20);
+
+        homingMissiles.forEach(m => m.update(dt, enemies));
+        homingMissiles = homingMissiles.filter(m => m.life > 0 && m.y > -20 && m.x > -20 && m.x < LOGICAL_WIDTH + 20);
+
+        stationaryLasers.forEach(sl => sl.update(dt, enemies));
+        stationaryLasers = stationaryLasers.filter(sl => sl.life > 0);
+
+        bossMissiles.forEach(m => m.update(dt));
+        bossMissiles = bossMissiles.filter(m => m.y < LOGICAL_HEIGHT + 30);
+      }
+
+      for (let mi = homingMissiles.length - 1; mi >= 0; mi--) {
+        const m = homingMissiles[mi];
+        for (let ei = enemies.length - 1; ei >= 0; ei--) {
+          const e = enemies[ei];
+          if (e.y < 20 || e.isDead || e.hp <= 0) continue;
+          if (Math.hypot(m.x - e.x, m.y - e.y) < m.radius + e.radius) {
+            homingMissiles.splice(mi, 1);
+            applyDamageToEnemy(e, m.dmg, "MISSILE_NEEDLE");
+            break;
+          }
+        }
+      }
+
+      for (let ei = enemies.length - 1; ei >= 0; ei--) {
+        const e = enemies[ei];
+        if (!isFrozen) e.update(dt, elapsed, speedScale, widthScale);
+        if (e.y > LOGICAL_HEIGHT + 40) { enemies.splice(ei, 1); continue; }
+
+        if (!isFrozen && e.y >= 20 && !e.isDead && e.hp > 0) {
+          for (let bi = bullets.length - 1; bi >= 0; bi--) {
+            const b = bullets[bi];
+            if (Math.hypot(b.x - e.x, b.y - e.y) < b.radius + e.radius) {
+              bullets.splice(bi, 1);
+              applyDamageToEnemy(e, b.dmg, b.bulletType);
+              break;
+            }
+          }
+        }
+
+        if (player && player.isAlive && e.y >= 20 && !e.isDead && e.hp > 0 && Math.hypot(player.x - e.x, player.y - e.y) < player.radius + e.radius) {
+          if (player.shieldRemain > 0 && !e.hasShield) {
+            safeKillEnemy(e);
+          } else {
+            triggerPlayerCinematicDeath(e.x, e.y);
+            break;
+          }
+        }
+      }
+
+      if (currentBoss && !isFrozen) {
+        for (let bi = bullets.length - 1; bi >= 0; bi--) {
+          const b = bullets[bi];
+          if (Math.hypot(b.x - currentBoss.x, b.y - currentBoss.y) < b.radius + currentBoss.radius) {
+            hitImpacts.push(new BulletHitImpactFX(b.x, b.y, b.bulletType));
+            bullets.splice(bi, 1);
+            currentBoss.hp--;
+            if (currentBoss.hp <= 0) {
+              score += 100;
+              bossDropItems.push(new BossDropItem(currentBoss.x, currentBoss.y));
+              currentBoss = null;
+              playExplosionSound();
+              break;
+            }
+          }
+        }
+      }
+
+      const gPct = Math.min(1.0, skillGauge / CONFIG.MAX_SKILL_GAUGE);
+      if (gPct >= 0.85 && !hedgehogLauncher.active && !isNukingTransition) {
+        hedgehogLauncher.active = true;
+        hedgehogLauncher.x = LOGICAL_WIDTH - 85;
+        hedgehogLauncher.y = LOGICAL_HEIGHT - 65;
+      }
+      if (skillGauge >= CONFIG.MAX_SKILL_GAUGE && !isNukingTransition) {
+        skillGauge = 0.0;
+        triggerSlotSequence();
+      }
+
+      missileShadows.forEach(ms => ms.draw());
+      bullets.forEach(b => b.draw());
+      homingMissiles.forEach(m => m.draw());
+      stationaryLasers.forEach(sl => sl.draw());
+      hitImpacts.forEach(hi => hi.draw());
+      bossMissiles.forEach(m => m.draw());
+      bossDropItems.forEach(it => it.draw(curTime));
+      enemies.filter(e => !e.isDead && e.hp > 0).forEach(e => e.draw(curTime));
+      blackHoles.forEach(b => b.draw());
+      lightningBolts.forEach(l => l.draw());
+      if (currentBoss) currentBoss.draw(curTime);
+      if (meteorManager) {
+        meteorManager.drawMeteors();
+        meteorManager.drawWarning();
+      }
+      rockDebrisList.forEach(rd => rd.draw());
+      explosions.forEach(ex => ex.draw());
+
+      if (player && player.isAlive) player.draw(curTime);
+
+      updateAndDrawPlayerCinematic(dt);
+
+      drawHedgehogLauncher(ctx, curTime);
+
+      nukeBeamBeams = nukeBeamBeams.filter(b => curTime - b.startTime < b.duration);
+      nukeBeamBeams.forEach(b => {
+        ctx.save();
+        ctx.strokeStyle = b.color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(b.sx, b.sy); ctx.lineTo(b.tx, b.ty);
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      if (hedgehogLauncher.flashAlpha > 0) {
+        ctx.save();
+        ctx.fillStyle = `rgba(255, 255, 255, ${hedgehogLauncher.flashAlpha})`;
+        ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+        ctx.restore();
+        hedgehogLauncher.flashAlpha = Math.max(0, hedgehogLauncher.flashAlpha - (dt / 0.3));
+      }
+
+      ctx.save();
+      ctx.textAlign = "right";
       ctx.fillStyle = "#ffffff";
       ctx.font = `bold 15px ${FONT_FAMILY}`;
-      ctx.fillText(c.title, c.x + c.w / 2, c.y + 35);
-      ctx.fillStyle = c.subCol;
-      ctx.font = `bold 13px ${FONT_FAMILY}`;
-      ctx.fillText(c.desc, c.x + c.w / 2, c.y + 60);
-
-      if (c.active) {
-        ctx.globalAlpha = 1.0;
-        ctx.fillStyle = "#ff2244";
-        ctx.font = `bold 18px ${FONT_FAMILY}`;
-        ctx.shadowColor = "#ff0000";
-        ctx.shadowBlur = 6;
-        ctx.fillText("[SOLD OUT]", c.x + c.w / 2, c.y + 48);
-      }
+      ctx.fillText(`SCORE: ${score}`, LOGICAL_WIDTH - 20, 25);
+      ctx.fillStyle = "#ffe600";
+      ctx.font = `13px ${FONT_FAMILY}`;
+      ctx.fillText(`TIME: ${Math.floor(elapsed)}s`, LOGICAL_WIDTH - 20, 45);
       ctx.restore();
-    });
 
-    if (curTime - lastMultRollTime >= 0.048) {
-      lastMultRollTime = curTime;
-      currentMultIndex = (currentMultIndex + 1) % shuffledMultiplierPool.length;
-    }
-    const currentMultOption = shuffledMultiplierPool[currentMultIndex];
+      const baseBottomY = LOGICAL_HEIGHT - 12;
+      if (player) {
+        ctx.font = `bold 13px ${FONT_FAMILY}`;
+        ctx.textAlign = "left";
 
-    const btnMult = { x: 35, y: 470, w: PERIMETER_W, h: PERIMETER_H };
-    ctx.save();
-    ctx.fillStyle = "rgba(20, 26, 52, 0.95)";
-    drawRoundRect(ctx, btnMult.x, btnMult.y, btnMult.w, btnMult.h, 12);
-    ctx.fill();
-    ctx.strokeStyle = "#ffd700";
-    ctx.lineWidth = 2.0;
-    ctx.stroke();
+        ctx.fillStyle = "#ff007f";
+        ctx.fillText(`POWER   : Lv.${Math.round(player.powerStat)}`, 14, baseBottomY - 32);
 
-    ORBIT_STARS.forEach((st, idx) => {
-      st.dist += st.speed * dt;
-      const pt = getPerimeterPoint(btnMult.x, btnMult.y, st.dist);
-      const pulse = Math.sin(curTime * 20.0 + idx) * 0.25 + 0.75;
-      ctx.fillStyle = st.color;
-      drawStarShape(ctx, pt.x, pt.y, 5, st.size * pulse, st.size * pulse * 0.45);
+        ctx.fillStyle = "#00f5ff";
+        ctx.fillText(`MISSILE : Lv.${Math.round(player.missileStat)}`, 14, baseBottomY - 17);
+
+        ctx.fillStyle = "#ffe600";
+        ctx.fillText(`RATE    : Lv.${Math.round(player.fireRateStat)}`, 14, baseBottomY - 2);
+      }
+
+      const gw = 130, gh = 16, gx = LOGICAL_WIDTH - gw - 20, gy = LOGICAL_HEIGHT - 35;
+      ctx.fillStyle = "#1e2438";
+      drawRoundRect(ctx, gx, gy, gw, gh, 4);
       ctx.fill();
-    });
+      ctx.fillStyle = "#00f5ff";
+      drawRoundRect(ctx, gx, gy, gw * gPct, gh, 4);
+      ctx.fill();
 
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#ffd700";
-    ctx.font = `bold 12px ${FONT_FAMILY}`;
-    ctx.fillText("★ [ RANDOM CHANCE : UP TO 3X MULTIPLIER ] ★", btnMult.x + btnMult.w / 2, btnMult.y + 24);
-    ctx.fillStyle = currentMultOption.col;
-    ctx.font = `bold 24px ${FONT_FAMILY}`;
-    ctx.fillText(currentMultOption.label, btnMult.x + btnMult.w / 2, btnMult.y + 56);
-    ctx.fillStyle = "#a5c0e0";
-    ctx.font = `11px ${FONT_FAMILY}`;
-    ctx.fillText("x1 (50%) / x2 (30%) / x3 (20%) CHANCE", btnMult.x + btnMult.w / 2, btnMult.y + 80);
-    ctx.restore();
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#00f5ff";
+      ctx.font = `bold 12px ${FONT_FAMILY}`;
+      ctx.fillText("SKILL GAUGE", gx, gy - 6);
 
-    if (randomPickShowcaseActive) {
-      const showcaseElapsed = curTime - randomPickShowcaseStartTime;
-      ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
-      ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+    } else if (gameState === 2) {
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#00f5ff";
+      ctx.font = `bold 24px ${FONT_FAMILY}`;
+      ctx.fillText("UPGRADE SELECTION", LOGICAL_WIDTH / 2, 44);
 
-      const popW = 340, popH = 200;
+      ctx.fillStyle = "#e2e8f0";
+      ctx.font = `bold 13px ${FONT_FAMILY}`;
+      ctx.shadowColor = "#00f5ff";
+      ctx.shadowBlur = 4;
+      ctx.fillText("★ [ GUARANTEED : 100% INSTANT UPGRADE ] ★", LOGICAL_WIDTH / 2, 74);
+      ctx.shadowBlur = 0;
+
+      const cards = [
+        { code: "POWER_UP", title: "POWER UP + 1", desc: `Current Lv.${player ? Math.round(player.powerStat) : 1}`, col: "#00f5ff", subCol: "#ff0080", x: 35, y: 95, w: 175, h: 80 },
+        { code: "MISSILE_UP", title: "MISSILE + 1", desc: `Current Lv.${player ? Math.round(player.missileStat) : 1}`, col: "#00f5ff", subCol: "#00f5ff", x: 240, y: 95, w: 175, h: 80 },
+        { code: "FIRE_RATE", title: "FIRE RATE + 1", desc: `Current Lv.${player ? Math.round(player.fireRateStat) : 1}`, col: "#64aaff", subCol: "#ffe600", x: 35, y: 195, w: 175, h: 80 },
+        { code: "CLONE_SHIP", title: "CLONE SHIP", desc: "1 ~ 30s RANDOM", col: "#78a0ff", subCol: "#78a0ff", x: 240, y: 195, w: 175, h: 80, active: player && player.clonePlaneTimer > 0 },
+        { code: "LASER_WEAPON", title: "LASER GUN", desc: "1 ~ 30s RANDOM", col: "#32ff78", subCol: "#00f5ff", x: 35, y: 295, w: 175, h: 80, active: player && player.laserWeaponTimer > 0 },
+        { code: "SHIELD", title: "ENERGY SHIELD", desc: "1 ~ 30s RANDOM", col: "#32ff78", subCol: "#32ff78", x: 240, y: 295, w: 175, h: 80, active: player && player.shieldRemain > 0 }
+      ];
+
+      cards.forEach((c) => {
+        ctx.save();
+        if (c.active) ctx.globalAlpha = 0.50;
+
+        ctx.fillStyle = "rgba(10, 16, 35, 0.85)";
+        drawRoundRect(ctx, c.x, c.y, c.w, c.h, 10);
+        ctx.fill();
+        ctx.strokeStyle = c.col;
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `bold 15px ${FONT_FAMILY}`;
+        ctx.fillText(c.title, c.x + c.w / 2, c.y + 35);
+        ctx.fillStyle = c.subCol;
+        ctx.font = `bold 13px ${FONT_FAMILY}`;
+        ctx.fillText(c.desc, c.x + c.w / 2, c.y + 60);
+
+        if (c.active) {
+          ctx.globalAlpha = 1.0;
+          ctx.fillStyle = "#ff2244";
+          ctx.font = `bold 18px ${FONT_FAMILY}`;
+          ctx.shadowColor = "#ff0000";
+          ctx.shadowBlur = 6;
+          ctx.fillText("[SOLD OUT]", c.x + c.w / 2, c.y + 48);
+        }
+        ctx.restore();
+      });
+
+      if (curTime - lastMultRollTime >= 0.048) {
+        lastMultRollTime = curTime;
+        currentMultIndex = (currentMultIndex + 1) % shuffledMultiplierPool.length;
+      }
+      const currentMultOption = shuffledMultiplierPool[currentMultIndex];
+
+      const btnMult = { x: 35, y: 470, w: PERIMETER_W, h: PERIMETER_H };
+      ctx.save();
+      ctx.fillStyle = "rgba(20, 26, 52, 0.95)";
+      drawRoundRect(ctx, btnMult.x, btnMult.y, btnMult.w, btnMult.h, 12);
+      ctx.fill();
+      ctx.strokeStyle = "#ffd700";
+      ctx.lineWidth = 2.0;
+      ctx.stroke();
+
+      ORBIT_STARS.forEach((st, idx) => {
+        st.dist += st.speed * dt;
+        const pt = getPerimeterPoint(btnMult.x, btnMult.y, st.dist);
+        const pulse = Math.sin(curTime * 20.0 + idx) * 0.25 + 0.75;
+        ctx.fillStyle = st.color;
+        drawStarShape(ctx, pt.x, pt.y, 5, st.size * pulse, st.size * pulse * 0.45);
+        ctx.fill();
+      });
+
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#ffd700";
+      ctx.font = `bold 12px ${FONT_FAMILY}`;
+      ctx.fillText("★ [ RANDOM CHANCE : UP TO 3X MULTIPLIER ] ★", btnMult.x + btnMult.w / 2, btnMult.y + 24);
+      ctx.fillStyle = currentMultOption.col;
+      ctx.font = `bold 24px ${FONT_FAMILY}`;
+      ctx.fillText(currentMultOption.label, btnMult.x + btnMult.w / 2, btnMult.y + 56);
+      ctx.fillStyle = "#a5c0e0";
+      ctx.font = `11px ${FONT_FAMILY}`;
+      ctx.fillText("x1 (50%) / x2 (30%) / x3 (20%) CHANCE", btnMult.x + btnMult.w / 2, btnMult.y + 80);
+      ctx.restore();
+
+      if (randomPickShowcaseActive) {
+        const showcaseElapsed = curTime - randomPickShowcaseStartTime;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+        ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+
+        const popW = 340, popH = 200;
+        const popX = LOGICAL_WIDTH / 2 - popW / 2;
+        const popY = LOGICAL_HEIGHT / 2 - popH / 2;
+
+        ctx.save();
+        ctx.fillStyle = "rgba(15, 25, 45, 0.98)";
+        drawRoundRect(ctx, popX, popY, popW, popH, 14);
+        ctx.fill();
+        ctx.strokeStyle = "#ffd700";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ffd700";
+        ctx.font = `bold 18px ${FONT_FAMILY}`;
+        ctx.fillText("★ BONUS MULTIPLIER WON! ★", LOGICAL_WIDTH / 2, popY + 45);
+        ctx.fillStyle = randomPickResult.col;
+        ctx.font = `bold 32px ${FONT_FAMILY}`;
+        ctx.fillText(randomPickResult.label, LOGICAL_WIDTH / 2, popY + 105);
+        ctx.fillStyle = "#00f5ff";
+        ctx.font = `bold 14px ${FONT_FAMILY}`;
+        ctx.fillText("STAT UPGRADED! RETURNING...", LOGICAL_WIDTH / 2, popY + 155);
+        ctx.restore();
+
+        if (showcaseElapsed >= 2.0) {
+          randomPickShowcaseActive = false;
+          isTouchActive = false;
+          if (player) { player.targetX = player.x; player.targetY = player.y; }
+          gameState = 1;
+        }
+      }
+
+    } else if (gameState === 5) {
+      const popW = 320, popH = 240;
       const popX = LOGICAL_WIDTH / 2 - popW / 2;
       const popY = LOGICAL_HEIGHT / 2 - popH / 2;
 
       ctx.save();
-      ctx.fillStyle = "rgba(15, 25, 45, 0.98)";
-      drawRoundRect(ctx, popX, popY, popW, popH, 14);
+      ctx.fillStyle = "rgba(12, 18, 38, 0.95)";
+      drawRoundRect(ctx, popX, popY, popW, popH, 12);
       ctx.fill();
-      ctx.strokeStyle = "#ffd700";
-      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "#00f5ff";
+      ctx.lineWidth = 2;
       ctx.stroke();
 
       ctx.textAlign = "center";
-      ctx.fillStyle = "#ffd700";
-      ctx.font = `bold 18px ${FONT_FAMILY}`;
-      ctx.fillText("★ BONUS MULTIPLIER WON! ★", LOGICAL_WIDTH / 2, popY + 45);
-      ctx.fillStyle = randomPickResult.col;
-      ctx.font = `bold 32px ${FONT_FAMILY}`;
-      ctx.fillText(randomPickResult.label, LOGICAL_WIDTH / 2, popY + 105);
       ctx.fillStyle = "#00f5ff";
-      ctx.font = `bold 14px ${FONT_FAMILY}`;
-      ctx.fillText("STAT UPGRADED! RETURNING...", LOGICAL_WIDTH / 2, popY + 155);
+      ctx.font = `bold 18px ${FONT_FAMILY}`;
+      const skillTitle = minigameTargetOption === "LASER_WEAPON" ? "LASER WEAPON" : (minigameTargetOption === "SHIELD" ? "ENERGY SHIELD" : "CLONE SHIP");
+      ctx.fillText(skillTitle, LOGICAL_WIDTH / 2, popY + 45);
+
+      if (minigameSelectedTime === null) {
+        minigameRollingTime = Math.floor(10 + Math.random() * 21);
+        ctx.fillStyle = "#ffe600";
+        ctx.font = `bold 56px ${FONT_FAMILY}`;
+        ctx.fillText(`${minigameRollingTime}s`, LOGICAL_WIDTH / 2, popY + 125);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `13px ${FONT_FAMILY}`;
+        ctx.fillText("TAP OR CLICK SCREEN TO STOP!", LOGICAL_WIDTH / 2, popY + 185);
+      } else {
+        ctx.fillStyle = "#32ff78";
+        ctx.font = `bold 56px ${FONT_FAMILY}`;
+        ctx.fillText(`${minigameSelectedTime}s`, LOGICAL_WIDTH / 2, popY + 125);
+        ctx.fillStyle = "#32ff78";
+        ctx.font = `bold 15px ${FONT_FAMILY}`;
+        ctx.fillText("DURATION CONFIRMED!", LOGICAL_WIDTH / 2, popY + 185);
+
+        if (curTime - minigameFinishTimestamp >= 1.2) {
+          applyChosenSkill(minigameTargetOption, minigameSelectedTime);
+        }
+      }
       ctx.restore();
 
-      if (showcaseElapsed >= 2.0) {
-        randomPickShowcaseActive = false;
-        isTouchActive = false;
-        if (player) { player.targetX = player.x; player.targetY = player.y; }
-        gameState = 1;
-      }
-    }
+    } else if (gameState === 3) {
+      const popY = LOGICAL_HEIGHT * 0.3;
+      ctx.save();
+      ctx.fillStyle = "#121626";
+      drawRoundRect(ctx, LOGICAL_WIDTH / 2 - 160, popY - 20, 320, 220, 14);
+      ctx.fill();
+      ctx.strokeStyle = "#ff0080";
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
-  } else if (gameState === 5) {
-    const popW = 320, popH = 240;
-    const popX = LOGICAL_WIDTH / 2 - popW / 2;
-    const popY = LOGICAL_HEIGHT / 2 - popH / 2;
-
-    ctx.save();
-    ctx.fillStyle = "rgba(12, 18, 38, 0.95)";
-    drawRoundRect(ctx, popX, popY, popW, popH, 12);
-    ctx.fill();
-    ctx.strokeStyle = "#00f5ff";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#00f5ff";
-    ctx.font = `bold 18px ${FONT_FAMILY}`;
-    const skillTitle = minigameTargetOption === "LASER_WEAPON" ? "LASER WEAPON" : (minigameTargetOption === "SHIELD" ? "ENERGY SHIELD" : "CLONE SHIP");
-    ctx.fillText(skillTitle, LOGICAL_WIDTH / 2, popY + 45);
-
-    if (minigameSelectedTime === null) {
-      minigameRollingTime = Math.floor(10 + Math.random() * 21);
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#ff0080";
+      ctx.font = `bold 24px ${FONT_FAMILY}`;
+      ctx.fillText("GAME OVER", LOGICAL_WIDTH / 2, popY + 15);
       ctx.fillStyle = "#ffe600";
-      ctx.font = `bold 56px ${FONT_FAMILY}`;
-      ctx.fillText(`${minigameRollingTime}s`, LOGICAL_WIDTH / 2, popY + 125);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = `13px ${FONT_FAMILY}`;
-      ctx.fillText("TAP OR CLICK SCREEN TO STOP!", LOGICAL_WIDTH / 2, popY + 185);
-    } else {
-      ctx.fillStyle = "#32ff78";
-      ctx.font = `bold 56px ${FONT_FAMILY}`;
-      ctx.fillText(`${minigameSelectedTime}s`, LOGICAL_WIDTH / 2, popY + 125);
-      ctx.fillStyle = "#32ff78";
+      ctx.font = `16px ${FONT_FAMILY}`;
+      ctx.fillText(`FINAL SCORE: ${score}`, LOGICAL_WIDTH / 2, popY + 45);
+
+      ctx.fillStyle = "#00f5ff";
+      drawRoundRect(ctx, LOGICAL_WIDTH / 2 - 90, popY + 125, 180, 42, 8);
+      ctx.fill();
+      ctx.fillStyle = "#080c18";
       ctx.font = `bold 15px ${FONT_FAMILY}`;
-      ctx.fillText("DURATION CONFIRMED!", LOGICAL_WIDTH / 2, popY + 185);
-
-      if (curTime - minigameFinishTimestamp >= 1.2) {
-        applyChosenSkill(minigameTargetOption, minigameSelectedTime);
-      }
+      ctx.fillText("SUBMIT & RESTART", LOGICAL_WIDTH / 2, popY + 151);
+      ctx.restore();
     }
-    ctx.restore();
-
-  } else if (gameState === 3) {
-    const popY = LOGICAL_HEIGHT * 0.3;
-    ctx.save();
-    ctx.fillStyle = "#121626";
-    drawRoundRect(ctx, LOGICAL_WIDTH / 2 - 160, popY - 20, 320, 220, 14);
-    ctx.fill();
-    ctx.strokeStyle = "#ff0080";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#ff0080";
-    ctx.font = `bold 24px ${FONT_FAMILY}`;
-    ctx.fillText("GAME OVER", LOGICAL_WIDTH / 2, popY + 15);
-    ctx.fillStyle = "#ffe600";
-    ctx.font = `16px ${FONT_FAMILY}`;
-    ctx.fillText(`FINAL SCORE: ${score}`, LOGICAL_WIDTH / 2, popY + 45);
-
-    ctx.fillStyle = "#00f5ff";
-    drawRoundRect(ctx, LOGICAL_WIDTH / 2 - 90, popY + 125, 180, 42, 8);
-    ctx.fill();
-    ctx.fillStyle = "#080c18";
-    ctx.font = `bold 15px ${FONT_FAMILY}`;
-    ctx.fillText("SUBMIT & RESTART", LOGICAL_WIDTH / 2, popY + 151);
-    ctx.restore();
+  } catch(err) {
+    console.error("Frame Loop Guard Handled Exception:", err);
   }
 
   requestAnimationFrame(safeGameLoop);
