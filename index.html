@@ -32,7 +32,7 @@ const nameInput = document.getElementById("name-input");
 
 const LOGICAL_WIDTH = 450;
 const LOGICAL_HEIGHT = 800;
-const VERSION_STR = "v20261010.BossFixedLaser20";
+const VERSION_STR = "v20261010.ChainLaserRefinedFinal";
 const FIREBASE_URL = "https://flywm-d0b39-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json";
 const FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', sans-serif";
 
@@ -64,8 +64,8 @@ function drawStarShape(c, cx, cy, spikes, outerRadius, innerRadius) {
   c.beginPath();
   c.moveTo(cx, cy - outerRadius);
   for (let i = 0; i < spikes; i++) {
-    x = cx + Math.cos(rot) * outerRadius;
-    y = cy + Math.sin(rot) * outerRadius;
+    let x = cx + Math.cos(rot) * outerRadius;
+    let y = cy + Math.sin(rot) * outerRadius;
     c.lineTo(x, y);
     rot += step;
     x = cx + Math.cos(rot) * innerRadius;
@@ -691,13 +691,11 @@ function drawVectorEnemy(c, designId, isHeavy, rotDir, curTime) {
   else drawVectorRegularEnemy(c, (designId || 0) % 4);
 }
 
-// 보스 디테일 메카닉 그래픽 완전 복원 (장갑 패널, 플라즈마 윙, 3중 회전 코어)
 function drawVectorBoss(c, curTime) {
   c.save();
   c.scale(1.02, 1.02);
   c.lineJoin = "round";
 
-  // 1. 외곽 플라즈마 사이드 윙
   c.save();
   c.shadowColor = "#00f5ff"; c.shadowBlur = 12;
   c.fillStyle = "rgba(0, 245, 255, 0.28)";
@@ -709,7 +707,6 @@ function drawVectorBoss(c, curTime) {
   c.closePath(); c.fill();
   c.restore();
 
-  // 2. 메인 중장갑 선체
   c.fillStyle = "#120815";
   c.strokeStyle = "#ff2244";
   c.lineWidth = 2.6;
@@ -721,7 +718,6 @@ function drawVectorBoss(c, curTime) {
   c.lineTo(-56, 32); c.lineTo(-28, 26);
   c.closePath(); c.fill(); c.stroke();
 
-  // 3. 내부 프레임 슬릿
   c.fillStyle = "#1c2438";
   c.strokeStyle = "rgba(255, 255, 255, 0.4)";
   c.lineWidth = 1.0;
@@ -730,7 +726,6 @@ function drawVectorBoss(c, curTime) {
   c.lineTo(0, -14); c.lineTo(-24, -20); c.lineTo(-40, 14); c.lineTo(-20, 18);
   c.closePath(); c.fill(); c.stroke();
 
-  // 4. 추진기 및 방열 포트
   c.fillStyle = "#475569";
   c.fillRect(-27, 28, 8, 20); c.fillRect(19, 28, 8, 20);
   c.strokeStyle = "#ff4400";
@@ -738,7 +733,6 @@ function drawVectorBoss(c, curTime) {
   c.fillStyle = "#ffaa00";
   c.fillRect(-25, 45, 4, 4); c.fillRect(21, 45, 4, 4);
 
-  // 5. 3중 회전 에너지 코어
   c.save();
   c.rotate(curTime * 2.2);
   c.strokeStyle = "#ffd700"; c.lineWidth = 2.0;
@@ -1069,7 +1063,7 @@ class HomingMissile {
   }
 }
 
-// 레이저: 하단 20% 범위 점진적 소멸 & 첫 적에서 최대 10도 굴절 후 다음 적 향해 최대 10도 2차 굴절
+// 1 & 2. 미사일형 레이저: 수직 직진 발사 후 적 높이에서 최대 10도 굴절, 돌맹이/혜성 제외, 보호막/보스 2회 공격 처리
 class StationaryMissileLaser {
   constructor(x, y, powerDmg, missileLv) {
     this.x = x;
@@ -1087,11 +1081,10 @@ class StationaryMissileLaser {
   calculateChainPath() {
     this.path = [{ x: this.x, y: this.startY }];
     this.hitEnemies = [];
-    // 꺾임 각도 최대 10도 제한
-    const maxBendRad = (10 * Math.PI) / 180;
+    const maxBendRad = (10 * Math.PI) / 180; // 최대 10도 굴절 제한
 
-    // 돌맹이(!e.isHeavy) 및 보호막(!e.hasShield) 제외
-    const valids1 = enemies.filter(e => e.hp > 0 && !e.isDead && !e.isHeavy && !e.hasShield && e.y < this.startY && e.y >= 20);
+    // 2. 혜성과 돌맹이를 공격 대상에서 제외 (!e.isHeavy)
+    const valids1 = enemies.filter(e => e.hp > 0 && !e.isDead && !e.isHeavy && e.y < this.startY && e.y >= 20);
     if (valids1.length === 0) {
       this.path.push({ x: this.x, y: 0 });
       return;
@@ -1100,19 +1093,22 @@ class StationaryMissileLaser {
     valids1.sort((a, b) => Math.hypot(a.x - this.x, a.y - this.startY) - Math.hypot(b.x - this.x, b.y - this.startY));
     let t1 = valids1[0];
 
-    // 1차 꺾임: 내 비행기에서 t1을 향해 직진하다가 최대 10도로 꺾임
+    // 1. 첫 발사 시 내 비행기에서 윗쪽으로 '수직 직진' 발사
+    this.path.push({ x: this.x, y: t1.y });
+
+    // 첫 적 위치에서 최대 10도로 꺾임
     let dx1 = t1.x - this.x;
     let dy1 = t1.y - this.startY;
     let maxDx1 = Math.abs(dy1) * Math.tan(maxBendRad);
     let clampedX1 = this.x + Math.max(-maxDx1, Math.min(maxDx1, dx1));
 
     this.path.push({ x: clampedX1, y: t1.y });
-    if (Math.abs(clampedX1 - t1.x) <= t1.radius + 8) {
+    if (Math.abs(clampedX1 - t1.x) <= t1.radius + 12) {
       this.hitEnemies.push(t1);
     }
 
-    // 2차 굴절: 1차 지점에서 윗쪽의 다음 가장 가까운 적 탐색
-    const valids2 = enemies.filter(e => e !== t1 && e.hp > 0 && !e.isDead && !e.isHeavy && !e.hasShield && e.y < t1.y && e.y >= 20);
+    // 2차 대상: 윗쪽에 있는 가장 가까운 적 (돌맹이 제외)
+    const valids2 = enemies.filter(e => e !== t1 && e.hp > 0 && !e.isDead && !e.isHeavy && e.y < t1.y && e.y >= 20);
     if (valids2.length === 0) {
       let dirX = (clampedX1 - this.x);
       this.path.push({ x: clampedX1 + dirX * 0.5, y: 0 });
@@ -1122,14 +1118,14 @@ class StationaryMissileLaser {
     valids2.sort((a, b) => Math.hypot(a.x - clampedX1, a.y - t1.y) - Math.hypot(b.x - clampedX1, b.y - t1.y));
     let t2 = valids2[0];
 
-    // 2차 꺾임: 닿지 않아도 다음 적 방향으로 최대 10도 꺾임
+    // 2차 꺾임: 닿지 않아도 다음 적을 향해 최대 10도 꺾임
     let dx2 = t2.x - clampedX1;
     let dy2 = t2.y - t1.y;
     let maxDx2 = Math.abs(dy2) * Math.tan(maxBendRad);
     let clampedX2 = clampedX1 + Math.max(-maxDx2, Math.min(maxDx2, dx2));
 
     this.path.push({ x: clampedX2, y: t2.y });
-    if (Math.abs(clampedX2 - t2.x) <= t2.radius + 8) {
+    if (Math.abs(clampedX2 - t2.x) <= t2.radius + 12) {
       this.hitEnemies.push(t2);
     }
 
@@ -1143,9 +1139,32 @@ class StationaryMissileLaser {
       this.damageTickTimer = 0;
       this.hitEnemies.forEach(e => {
         if (e && !e.isDead && e.hp > 0) {
-          applyDamageToEnemy(e, this.powerDmg, "MISSILE_NEEDLE");
+          // 2. 보호막 있는 적은 2회 공격 처리
+          const hitCount = e.hasShield ? 2 : 1;
+          for (let h = 0; h < hitCount; h++) {
+            applyDamageToEnemy(e, this.powerDmg, "MISSILE_NEEDLE");
+          }
         }
       });
+
+      // 2. 보스에게 닿았을 때 2회 공격 처리
+      if (currentBoss && currentBoss.hp > 0) {
+        for (let i = 0; i < this.path.length - 1; i++) {
+          const segX = this.path[i].x;
+          if (Math.abs(segX - currentBoss.x) <= currentBoss.radius + 8) {
+            currentBoss.hp -= 2; // 2회 공격
+            hitImpacts.push(new BulletHitImpactFX(currentBoss.x, currentBoss.y, "MISSILE_NEEDLE"));
+            playTone(450, 0.08, "triangle", 0, 0.08);
+            if (currentBoss.hp <= 0) {
+              score += 100;
+              bossDropItems.push(new BossDropItem(currentBoss.x, currentBoss.y));
+              currentBoss = null;
+              playExplosionSound();
+            }
+            break;
+          }
+        }
+      }
     }
   }
 
@@ -1154,7 +1173,7 @@ class StationaryMissileLaser {
     const progress = 1.0 - (this.life / this.totalLife);
     const alpha = Math.max(0, this.life / this.totalLife);
 
-    // 하단 20% 범위의 점진적 소멸 연출
+    // 하단 20% 범위 점진적 소멸 연출
     const bottomCutLength = (this.startY - this.path[1].y) * 0.20 * Math.pow(progress, 0.6);
     const renderPath = JSON.parse(JSON.stringify(this.path));
     renderPath[0].y = this.startY - bottomCutLength;
@@ -1675,6 +1694,59 @@ function updateAndDrawPlayerCinematic(dt) {
   }
 }
 
+// 4. 고해상도 맞춤형 탄환 클래스
+class Bullet {
+  constructor(x, y, vx, vy, dmg, radius=4.5, bulletType="DEFAULT", isBlackHoleTrigger=false) {
+    this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+    this.dmg = dmg; this.radius = radius;
+    this.bulletType = bulletType;
+    this.isBlackHoleTrigger = isBlackHoleTrigger;
+  }
+  update(dt) { this.x += this.vx * (dt * 60); this.y += this.vy * (dt * 60); }
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+
+    if (this.bulletType === "LEGEND") {
+      ctx.shadowColor = "#ffd700"; ctx.shadowBlur = 8;
+      ctx.fillStyle = "#ffd700";
+      ctx.beginPath();
+      ctx.moveTo(0, -11); ctx.lineTo(4, 5); ctx.lineTo(0, 2); ctx.lineTo(-4, 5);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(0, -3, 2, 0, Math.PI * 2); ctx.fill();
+
+    } else if (this.bulletType === "POWER") {
+      ctx.shadowColor = "#ff2244"; ctx.shadowBlur = 8;
+      ctx.fillStyle = "#ff2244";
+      ctx.beginPath();
+      ctx.moveTo(0, -8); ctx.lineTo(4.5, 4); ctx.lineTo(-4.5, 4);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#ffe600";
+      ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, Math.PI * 2); ctx.fill();
+
+    } else if (this.bulletType === "BLACK_HOLE") {
+      ctx.shadowColor = "#bf00ff"; ctx.shadowBlur = 10;
+      ctx.fillStyle = "#1e0033";
+      ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#bf00ff"; ctx.lineWidth = 2.0; ctx.stroke();
+
+    } else if (this.bulletType === "TWIN") {
+      ctx.shadowColor = "#00ff66"; ctx.shadowBlur = 6;
+      ctx.fillStyle = "#00ff66";
+      ctx.beginPath(); ctx.ellipse(0, 0, 2.8, 8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.ellipse(0, 0, 1.2, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+
+    } else {
+      ctx.shadowColor = "#ffe600"; ctx.shadowBlur = 5;
+      ctx.fillStyle = "#ffe600";
+      ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
 class Enemy {
   constructor(maxHp, baseSpeed, designId, hasShield=false, isHeavy=false) {
     this.originX = 40 + Math.random() * (LOGICAL_WIDTH - 80);
@@ -2000,6 +2072,7 @@ function initBattleState() {
   gameState = 1;
 }
 
+// 3. 고슴도치 레이저: 지속시간 30% 단축(0.3s -> 0.21s), 돌맹이와 혜성도 타겟팅에 포함
 function triggerSlotSequence() {
   if (isNukingTransition) return;
   isNukingTransition = true;
@@ -2013,15 +2086,22 @@ function triggerSlotSequence() {
 
   playTone(800, 0.35, "sawtooth", -300, 0.15);
 
-  const validTargets = enemies.filter(e => !e.isDead && e.hp > 0 && e.y >= 20).sort((a, b) => b.y - a.y);
+  // 일반 적 + 돌맹이 포함
+  let validTargets = enemies.filter(e => !e.isDead && e.hp > 0 && e.y >= 20).map(e => ({ type: "ENEMY", obj: e, x: e.x, y: e.y }));
+  // 3. 혜성도 타겟팅에 포함
+  meteorManager.meteors.filter(m => m.active && m.y >= 20).forEach(m => {
+    validTargets.push({ type: "METEOR", obj: m, x: m.x, y: m.y });
+  });
+
+  validTargets.sort((a, b) => b.y - a.y);
   const colors = ["#00f5ff", "#ff007f", "#39ff14", "#ffe600", "#bf00ff", "#ff5500", "#ffffff"];
 
   if (validTargets.length === 0) {
-    setTimeout(finishNukeSequence, 2000);
+    setTimeout(finishNukeSequence, 1500);
     return;
   }
 
-  const totalFireDuration = 1.3;
+  const totalFireDuration = 1.0;
   const batchSize = Math.min(4, Math.max(1, Math.ceil(validTargets.length / 8)));
   const totalBatches = Math.ceil(validTargets.length / batchSize);
   const batchInterval = totalFireDuration / totalBatches;
@@ -2032,31 +2112,34 @@ function triggerSlotSequence() {
       const now = performance.now() / 1000;
       currentBatch.forEach((tgt, subIdx) => {
         const c = colors[(b * batchSize + subIdx) % colors.length];
+        // 3. 레이저 노출 시간 30% 단축 (0.30s -> 0.21s)
         nukeBeamBeams.push({
           sx: hedgehogLauncher.x, sy: hedgehogLauncher.y,
           tx: tgt.x, ty: tgt.y,
-          color: c, startTime: now, duration: 0.30
+          color: c, startTime: now, duration: 0.21
         });
 
-        tgt.hasShield = false;
-        tgt.hp = 0;
-        tgt.isDead = true;
-        score += 1;
-        explosions.push(new ExplosionFX(tgt.x, tgt.y, c));
-
-        const targetIdx = enemies.indexOf(tgt);
-        if (targetIdx !== -1) enemies.splice(targetIdx, 1);
+        if (tgt.type === "ENEMY") {
+          const e = tgt.obj;
+          e.hasShield = false;
+          safeKillEnemy(e, c);
+        } else if (tgt.type === "METEOR") {
+          tgt.obj.active = false;
+          explosions.push(new ExplosionFX(tgt.x, tgt.y, "#ff7700"));
+          score += 5;
+        }
 
         playTone(950 + ((b + subIdx) % 5) * 80, 0.12, "sawtooth", -350, 0.14);
       });
     }, b * (batchInterval * 1000));
   }
 
-  setTimeout(finishNukeSequence, 2000);
+  setTimeout(finishNukeSequence, 1600);
 }
 
 function finishNukeSequence() {
   enemies = enemies.filter(e => !e.isDead && e.hp > 0);
+  meteorManager.meteors = meteorManager.meteors.filter(m => m.active);
   nukeBeamBeams = [];
   isNukingTransition = false;
   hedgehogLauncher.active = false;
@@ -2287,7 +2370,7 @@ let explosions = [];
 let activeLasers = [];
 
 // ==========================================
-// 8. 렌더링 프레임 루프 (방어 가드 적용)
+// 8. 렌더링 프레임 루프 (완벽 방어 가드)
 // ==========================================
 let lastTime = performance.now();
 
