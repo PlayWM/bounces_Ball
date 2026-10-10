@@ -32,7 +32,7 @@ const nameInput = document.getElementById("name-input");
 
 const LOGICAL_WIDTH = 450;
 const LOGICAL_HEIGHT = 800;
-const VERSION_STR = "v20261010.GalaxyMaster2";
+const VERSION_STR = "v20261010.StableFinal";
 const FIREBASE_URL = "https://flywm-d0b39-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json";
 const FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', sans-serif";
 
@@ -192,7 +192,7 @@ function uploadScore(name, finalScore) {
 }
 
 // =================================================================
-// 3. Web Audio 사운드 엔진 (선택화면 BGM 50% 증폭, 인게임 50% 감쇠)
+// 3. Web Audio 사운드 엔진
 // =================================================================
 let audioCtx = null;
 let bgmInterval = null;
@@ -308,8 +308,7 @@ function startBGMEngine() {
         osc.type = "sine";
         const f = activeMelody[(bgmStep / 4) % activeMelody.length];
         osc.frequency.setValueAtTime(f, now);
-        // 6. 선택 화면 배경음악 볼륨 50% 키움 (0.0175 -> 0.026)
-        g.gain.setValueAtTime(0.026, now);
+        g.gain.setValueAtTime(0.026, now); // 선택 화면 볼륨 상향
         g.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
         osc.connect(g); g.connect(audioCtx.destination);
         osc.start(now); osc.stop(now + 0.45);
@@ -321,8 +320,7 @@ function startBGMEngine() {
         const bG = audioCtx.createGain();
         bOsc.type = inGameBgmTrack === 1 ? "square" : "sawtooth";
         bOsc.frequency.setValueAtTime(activeTrack[0] / 2, now);
-        // 6. 본게임 화면 배경음악 크기 50% 추가 감소 (0.0225 -> 0.0112)
-        bG.gain.setValueAtTime(0.0112, now);
+        bG.gain.setValueAtTime(0.0112, now); // 인게임 볼륨 감쇠
         bG.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
         bOsc.connect(bG); bG.connect(audioCtx.destination);
         bOsc.start(now); bOsc.stop(now + 0.25);
@@ -358,25 +356,24 @@ const CONFIG = {
   BASE_GAUGE_PER_KILL: 2.6
 };
 
-// 1. 선택화면 은하: 화면 중앙 위치, 3중 가스구름, 별 4배(112개), 4가지 크기
+// 1. 선택화면 은하: 정중앙 위치 & 별 112개(4배) 4종 크기
 const GALAXY_STARS = Array.from({ length: 112 }, (_, i) => ({
   angOffset: Math.random() * Math.PI * 2,
-  dist: Math.random() * 120,
-  size: [0.8, 1.4, 2.0, 2.8][i % 4], // 4가지 크기
+  dist: Math.random() * 125,
+  size: [0.8, 1.4, 2.0, 2.8][i % 4],
   speedMult: 0.6 + Math.random() * 0.8
 }));
 
 function drawGalaxyBackground(c, curTime) {
   c.save();
   const gx = LOGICAL_WIDTH * 0.5;
-  const gy = LOGICAL_HEIGHT * 0.5; // 선택화면 정중앙으로 위치이동
+  const gy = LOGICAL_HEIGHT * 0.5;
 
   c.save();
   c.translate(gx, gy);
   c.scale(1.5, 1.5);
   c.rotate(curTime * 0.06);
 
-  // 1-1. 복합 다층 가스 구름
   const gGrad1 = c.createRadialGradient(0, 0, 10, 0, 0, 170);
   gGrad1.addColorStop(0, "rgba(255, 240, 255, 0.45)");
   gGrad1.addColorStop(0.2, "rgba(160, 80, 255, 0.30)");
@@ -397,7 +394,6 @@ function drawGalaxyBackground(c, curTime) {
   c.beginPath(); c.arc(0, 0, 135, 0, Math.PI * 2); c.fill();
   c.restore();
 
-  // 1-2. 112개의 4가지 크기 별 렌더링
   GALAXY_STARS.forEach((st, idx) => {
     const curAng = st.angOffset + curTime * 0.15 * st.speedMult;
     const sx = Math.cos(curAng) * st.dist;
@@ -856,7 +852,7 @@ class Player {
     const trait = this.getDominantTrait();
     let isBlackHoleShot = (trait === "POWER" && this.shotCount % 5 === 0);
 
-    // 4. 비행기별 모양과 특성에 완벽히 맞춘 고유 총알 렌더링
+    // 4. 기체별 특성에 맞춘 고유 총알
     if (this.name === "Legend") {
       bullets.push(new Bullet(px, py - 22, 0, -17, dmg, 4.5, "LEGEND"));
       bullets.push(new Bullet(px, py - 22, -1.0, -17, dmg, 4.5, "LEGEND"));
@@ -1005,7 +1001,7 @@ class HomingMissile {
   }
 }
 
-// 2 & 5. 30% 얇아진 미사일형 고정 레이저 & 타이밍 동기화된 하단 10% 소멸
+// 2 & 5. 레이저 30% 슬림화 & 하단 10% 점진적 소멸
 class StationaryMissileLaser {
   constructor(x, y, powerDmg, missileLv) {
     this.x = x;
@@ -1021,7 +1017,7 @@ class StationaryMissileLaser {
     this.damageTickTimer += dt;
     if (this.damageTickTimer >= 0.2) {
       this.damageTickTimer = 0;
-      const beamHalfWidth = 7; // 30% 얇아진 폭
+      const beamHalfWidth = 7;
       const branchWidth = (this.missileLv >= 8) ? (15 * (this.missileLv >= 16 ? 2.0 : 1.0)) : 0;
 
       enemiesList.forEach(e => {
@@ -1036,15 +1032,12 @@ class StationaryMissileLaser {
   }
   draw() {
     if (this.life <= 0) return;
-    const progress = 1.0 - (this.life / this.totalLife); // 0.0 ~ 1.0 (0.3초 동안 진행)
-
-    // 하단 10% 범위가 전체 레이저 유지 시간(0.3초)과 딱 맞아떨어지게 소멸 수축
+    const progress = 1.0 - (this.life / this.totalLife);
     const bottom10Length = this.startY * 0.10;
-    const cutOffset = bottom10Length * Math.pow(progress, 0.7); // 부드러운 수축 보정
+    const cutOffset = bottom10Length * Math.pow(progress, 0.7);
     const effectiveStartY = this.startY - cutOffset;
 
     ctx.save();
-    // 5. 30% 얇아진 외곽선 (14px -> 9.8px) 및 중심 빔 (4px -> 2.8px)
     ctx.strokeStyle = "rgba(0, 245, 255, 0.45)";
     ctx.lineWidth = 9.8;
     ctx.beginPath(); ctx.moveTo(this.x, effectiveStartY); ctx.lineTo(this.x, 0); ctx.stroke();
@@ -1738,17 +1731,15 @@ class BossEnemy {
 // =================================================================
 let hedgehogLauncher = {
   active: false,
-  emergeProgress: 0,
   x: 0, y: 0,
   flashAlpha: 0,
   timeStopTimer: 0,
   isExecutingNuke: false
 };
 
-// 9. 고슴도치 85% 등장 & 스킬바 주변 어슬렁거리기 패트롤
+// 9. 고슴도치 85% 시 등장 & 스킬 바 주변 어슬렁어슬렁 배회
 function drawHedgehogLauncher(c, curTime) {
   if (!hedgehogLauncher.active) return;
-  // 스킬 바 주변에서 부드럽게 어슬렁어슬렁 배회
   const wanderX = hedgehogLauncher.x + Math.sin(curTime * 1.8) * 18;
   const wanderY = hedgehogLauncher.y + Math.cos(curTime * 2.4) * 8;
 
@@ -1804,7 +1795,7 @@ function startBattle(type) {
   playTone(330, 0.1, "triangle", 220, 0.12);
   setTimeout(() => playTone(550, 0.2, "triangle", 330, 0.15), 80);
 
-  // 7. 인게임 진입 시 3종 배경음악 중 무작위 선택
+  // 7. 인게임 진입 시 3종 배경음악 무작위 배정
   inGameBgmTrack = Math.floor(Math.random() * 3);
   currentBgmMode = "ingame";
   sessionStartTime = performance.now();
@@ -2126,7 +2117,7 @@ let homingMissiles = [];
 let stationaryLasers = [];
 let missileShadows = [];
 let rockDebrisList = [];
-let hitImpacts = [];
+let hitImpacts = []; // 3번 총알 타격 이펙트
 let enemies = [];
 let bossMissiles = [];
 let bossDropItems = [];
@@ -2370,10 +2361,10 @@ function safeGameLoop(now) {
       if (elapsed >= 60.0 && elapsed < 300.0) shieldProb = 0.03;
       else if (elapsed >= 300.0) shieldProb = Math.min(0.10, 0.03 * Math.pow(1.10, Math.floor((elapsed - 300.0) / 30.0)));
 
-      // 일반 적 스폰
+      // 일반 적 스폰: 60초 이전에는 절대 isHeavy=true가 들어가지 않도록 명시적 false 전달
       enemies.push(new Enemy(calculatedHp, CONFIG.BASE_ENEMY_SPEED + Math.min(1.0, elapsed / 180.0) * 3.5, Math.floor(Math.random() * 4), Math.random() < shieldProb, false));
 
-      // 3. 돌맹이(엘리트): 60초 이전에는 절대 스폰되지 않으며, 60초 이후 정확히 60초 간격으로만 1기 스폰
+      // 3. 돌맹이(엘리트): 60초 이전 절대 미출현 & 60초 쿨타임 당 1기 스폰
       if (elapsed >= 60.0 && elapsed - lastHeavySpawnTime >= 60.0) {
         const currentHeavyCount = enemies.filter(e => e.isHeavy && !e.isDead && e.hp > 0).length;
         if (currentHeavyCount === 0) {
@@ -2451,7 +2442,7 @@ function safeGameLoop(now) {
         }
       }
 
-      // 3. 투명 의문사 원천 차단: 화면 내부(y >= 10)로 완전히 내려온 적만 충돌 판정 허용
+      // 2 & 3. 화면 내부(y >= 10)에 진입한 실체 적만 플레이어와 충돌 (투명 충돌 버그 방지)
       if (player && player.isAlive && e.y >= 10 && Math.hypot(player.x - e.x, player.y - e.y) < player.radius + e.radius) {
         if (player.shieldRemain > 0 && !e.hasShield) {
           safeKillEnemy(e);
@@ -2480,7 +2471,7 @@ function safeGameLoop(now) {
       }
     }
 
-    // 9. 스킬게이지 85% 시 고슴도치 등장 및 스킬바 주변 어슬렁거리기
+    // 9. 게이지 85% 시 고슴도치 등장 및 스킬바 주변 어슬렁어슬렁 배회
     const gPct = Math.min(1.0, skillGauge / CONFIG.MAX_SKILL_GAUGE);
     if (gPct >= 0.85 && !hedgehogLauncher.active && !isNukingTransition) {
       hedgehogLauncher.active = true;
@@ -2545,20 +2536,20 @@ function safeGameLoop(now) {
     ctx.fillText(`TIME: ${Math.floor(elapsed)}s`, LOGICAL_WIDTH - 20, 45);
     ctx.restore();
 
-    // 8. 본게임 좌측 하단 스탯 문자 2배 확대(24px) & 고유 테마 색상 적용
-    const baseBottomY = LOGICAL_HEIGHT - 16;
+    // 1 & 8. 스킬 렙 문자 40% 축소(10px) 및 능력별 고유 색상 배치
+    const baseBottomY = LOGICAL_HEIGHT - 12;
     if (player) {
-      ctx.font = `bold 24px ${FONT_FAMILY}`; // 2배 크기 적용
+      ctx.font = `bold 10px ${FONT_FAMILY}`; // 40% 크기 축소 (10px)
       ctx.textAlign = "left";
 
-      ctx.fillStyle = "#ff007f"; // POWER: 핫핑크
-      ctx.fillText(`POWER   : Lv.${Math.round(player.powerStat)}`, 14, baseBottomY - 60);
+      ctx.fillStyle = "#ff007f";
+      ctx.fillText(`POWER   : Lv.${Math.round(player.powerStat)}`, 14, baseBottomY - 26);
 
-      ctx.fillStyle = "#00f5ff"; // MISSILE: 네온 시안
-      ctx.fillText(`MISSILE : Lv.${Math.round(player.missileStat)}`, 14, baseBottomY - 32);
+      ctx.fillStyle = "#00f5ff";
+      ctx.fillText(`MISSILE : Lv.${Math.round(player.missileStat)}`, 14, baseBottomY - 14);
 
-      ctx.fillStyle = "#ffe600"; // RATE: 일렉트릭 옐로우
-      ctx.fillText(`RATE    : Lv.${Math.round(player.fireRateStat)}`, 14, baseBottomY - 4);
+      ctx.fillStyle = "#ffe600";
+      ctx.fillText(`RATE    : Lv.${Math.round(player.fireRateStat)}`, 14, baseBottomY - 2);
     }
 
     const gw = 130, gh = 16, gx = LOGICAL_WIDTH - gw - 20, gy = LOGICAL_HEIGHT - 35;
