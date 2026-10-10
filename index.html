@@ -32,7 +32,7 @@ const nameInput = document.getElementById("name-input");
 
 const LOGICAL_WIDTH = 450;
 const LOGICAL_HEIGHT = 800;
-const VERSION_STR = "v20261010.FixAllEngines";
+const VERSION_STR = "v20261010.FastRespawnAsteroidFix";
 const FIREBASE_URL = "https://flywm-d0b39-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json";
 const FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', sans-serif";
 
@@ -64,8 +64,8 @@ function drawStarShape(c, cx, cy, spikes, outerRadius, innerRadius) {
   c.beginPath();
   c.moveTo(cx, cy - outerRadius);
   for (let i = 0; i < spikes; i++) {
-    let x = cx + Math.cos(rot) * outerRadius;
-    let y = cy + Math.sin(rot) * outerRadius;
+    x = cx + Math.cos(rot) * outerRadius;
+    y = cy + Math.sin(rot) * outerRadius;
     c.lineTo(x, y);
     rot += step;
     x = cx + Math.cos(rot) * innerRadius;
@@ -632,6 +632,7 @@ function drawVectorRegularEnemy(c, subType) {
   c.restore();
 }
 
+// 돌맹이: 암흑 배경에 묻히지 않도록 밝은 마그마 코어 & 고광도 네온 외곽선 적용
 function drawVectorEliteAsteroid(c, rockId, curTime) {
   c.save();
   c.rotate(curTime * 0.45);
@@ -639,11 +640,11 @@ function drawVectorEliteAsteroid(c, rockId, curTime) {
   c.lineCap = "round";
 
   const type = (rockId || 0) % 4;
-  c.fillStyle = "#1c1d24";
-  c.strokeStyle = "#ff4466";
-  c.lineWidth = 2.4;
-  c.shadowColor = "#ff2255";
-  c.shadowBlur = 8;
+  c.fillStyle = "#331018";
+  c.strokeStyle = "#ff3366";
+  c.lineWidth = 2.8;
+  c.shadowColor = "#ff0055";
+  c.shadowBlur = 12;
 
   c.beginPath();
   if (type === 0) {
@@ -672,9 +673,9 @@ function drawVectorEliteAsteroid(c, rockId, curTime) {
     { x: 11, y: 7, r: 5.6 }, { x: -8, y: 11, r: 4.5 }, { x: -2, y: 0, r: 3.5 }
   ];
   craters.forEach(cr => {
-    c.fillStyle = "#0c0d12";
+    c.fillStyle = "#ff2244";
     c.beginPath(); c.arc(cr.x, cr.y, cr.r, 0, Math.PI * 2); c.fill();
-    c.strokeStyle = "rgba(255, 68, 102, 0.75)"; c.lineWidth = 1.2; c.stroke();
+    c.strokeStyle = "#ffe600"; c.lineWidth = 1.0; c.stroke();
   });
   c.restore();
 }
@@ -1491,6 +1492,7 @@ class ExplosionFX {
   }
 }
 
+// 비행기 파괴 시 2초 슬로우 제거 및 즉시 기체 선택 화면으로 복귀 (0.4초간 빠른 파편 폭발)
 let playerDeathCinematic = {
   active: false,
   timer: 0.0,
@@ -1504,20 +1506,21 @@ function triggerPlayerCinematicDeath(hitSourceX, hitSourceY) {
   playerDeathCinematic.timer = 0.0;
 
   const pCol = player.pType === 4 ? "#ffd700" : (player.pType === 1 ? "#ff2244" : (player.pType === 2 ? "#00ff66" : "#00f5ff"));
-  playerDeathCinematic.shards = Array.from({ length: 22 }, (_, idx) => {
+  playerDeathCinematic.shards = Array.from({ length: 24 }, (_, idx) => {
     const ang = Math.random() * Math.PI * 2;
-    const spd = 0.5 + Math.random() * 2.0;
+    const spd = 4.0 + Math.random() * 6.0; // 빠른 폭발 속도
     return {
       x: player.x, y: player.y,
       vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
-      w: 4 + Math.random() * 9,
+      w: 4 + Math.random() * 8,
       h: 2 + Math.random() * 6,
       rot: Math.random() * Math.PI,
-      rotSpd: (Math.random() - 0.5) * 5,
+      rotSpd: (Math.random() - 0.5) * 12,
       color: idx % 3 === 0 ? "#ffffff" : pCol
     };
   });
 
+  explosions.push(new ExplosionFX(player.x, player.y, pCol));
   playExplosionSound();
 }
 
@@ -1526,139 +1529,27 @@ function updateAndDrawPlayerCinematic(dt) {
   playerDeathCinematic.timer += dt;
   const elapsed = playerDeathCinematic.timer;
 
-  const slowProgress = Math.min(1.0, elapsed / 2.0);
   ctx.save();
-  ctx.globalAlpha = Math.max(0, 1.0 - slowProgress * 0.9);
+  ctx.globalAlpha = Math.max(0, 1.0 - elapsed / 0.4);
   playerDeathCinematic.shards.forEach(s => {
-    s.x += s.vx * (dt * 30);
-    s.y += s.vy * (dt * 30);
+    s.x += s.vx * (dt * 60);
+    s.y += s.vy * (dt * 60);
     s.rot += s.rotSpd * dt;
 
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.rotate(s.rot);
     ctx.fillStyle = s.color;
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 1;
     ctx.fillRect(-s.w / 2, -s.h / 2, s.w, s.h);
-    ctx.strokeRect(-s.w / 2, -s.h / 2, s.w, s.h);
     ctx.restore();
   });
   ctx.restore();
 
-  if (elapsed >= 2.0) {
+  // 파괴 연출 완료 즉시(0.4초) 비행기 선택 화면(gameState = 0)으로 직행
+  if (elapsed >= 0.4) {
     playerDeathCinematic.active = false;
-    handleGameOver();
-  }
-}
-
-class LightningBolt {
-  constructor(x, y, radius) {
-    this.x = x; this.y = y;
-    this.radius = radius;
-    this.life = 0.8;
-  }
-  update(dt, enemiesList) {
-    this.life -= dt;
-    for (let ei = enemiesList.length - 1; ei >= 0; ei--) {
-      const e = enemiesList[ei];
-      if (e.y < 20) continue;
-      if (Math.hypot(e.x - this.x, e.y - this.y) <= this.radius + e.radius) {
-        if (!e.hasShield && !e.isDead) safeKillEnemy(e, "#00f5ff");
-      }
-    }
-  }
-  draw() {
-    if (this.life <= 0) return;
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, this.life);
-    ctx.strokeStyle = "#00f5ff"; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
-    ctx.restore();
-  }
-}
-
-class BossDropItem {
-  constructor(x, y) {
-    this.x = x; this.y = y;
-    this.radius = 16; this.speed = 2.2;
-    this.spawnTime = performance.now() / 1000;
-  }
-  getType(curTime) {
-    const elapsed = curTime - this.spawnTime;
-    const idx = Math.floor(elapsed) % 3;
-    return ["P", "M", "D"][idx];
-  }
-  update(dt) { this.y += this.speed * (dt * 60); }
-  draw(curTime) {
-    const type = this.getType(curTime);
-    ctx.save();
-    ctx.fillStyle = type === "P" ? "#ff0080" : (type === "M" ? "#00f5ff" : "#ffe600");
-    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2.0; ctx.stroke();
-    ctx.fillStyle = "#ffffff";
-    ctx.font = `bold 14px ${FONT_FAMILY}`;
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(type, this.x, this.y);
-    ctx.restore();
-  }
-}
-
-class Bullet {
-  constructor(x, y, vx, vy, dmg, radius=4.5, bulletType="DEFAULT", isBlackHoleTrigger=false) {
-    this.x = x; this.y = y; this.vx = vx; this.vy = vy;
-    this.dmg = dmg; this.radius = radius;
-    this.bulletType = bulletType;
-    this.isBlackHoleTrigger = isBlackHoleTrigger;
-  }
-  update(dt) { this.x += this.vx * (dt * 60); this.y += this.vy * (dt * 60); }
-  draw() {
-    ctx.save();
-    ctx.translate(this.x, this.y);
-
-    if (this.bulletType === "LEGEND") {
-      ctx.shadowColor = "#ffd700"; ctx.shadowBlur = 8;
-      ctx.fillStyle = "#ffd700";
-      ctx.beginPath();
-      ctx.moveTo(0, -11); ctx.lineTo(4, 5); ctx.lineTo(0, 2); ctx.lineTo(-4, 5);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath(); ctx.arc(0, -3, 2, 0, Math.PI * 2); ctx.fill();
-
-    } else if (this.bulletType === "POWER") {
-      ctx.shadowColor = "#ff2244"; ctx.shadowBlur = 8;
-      ctx.fillStyle = "#ff2244";
-      ctx.beginPath();
-      ctx.moveTo(0, -8); ctx.lineTo(4.5, 4); ctx.lineTo(-4.5, 4);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "#ffe600";
-      ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, Math.PI * 2); ctx.fill();
-
-    } else if (this.bulletType === "BLACK_HOLE") {
-      ctx.shadowColor = "#bf00ff"; ctx.shadowBlur = 10;
-      ctx.fillStyle = "#1e0033";
-      ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = "#bf00ff"; ctx.lineWidth = 2.0; ctx.stroke();
-
-    } else if (this.bulletType === "TWIN") {
-      ctx.shadowColor = "#00ff66"; ctx.shadowBlur = 6;
-      ctx.fillStyle = "#00ff66";
-      ctx.beginPath(); ctx.ellipse(0, 0, 2.8, 8, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath(); ctx.ellipse(0, 0, 1.2, 4.5, 0, 0, Math.PI * 2); ctx.fill();
-
-    } else if (this.bulletType === "MISSILE_NEEDLE") {
-      ctx.shadowColor = "#00f5ff"; ctx.shadowBlur = 6;
-      ctx.fillStyle = "#00f5ff";
-      ctx.fillRect(-1.5, -8, 3, 16);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(-0.7, -4, 1.4, 8);
-
-    } else {
-      ctx.fillStyle = "#ffe600";
-      ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.restore();
+    setSelectScreenMode();
+    gameState = 0;
   }
 }
 
@@ -2042,7 +1933,7 @@ function applyChosenSkill(code, customDuration=null) {
 }
 
 // =================================================================
-// 7. 통합 사용자 입력 리스너 (외곽 드래그 가드 & 거리 30% 축소: 84px)
+// 7. 통합 사용자 입력 리스너
 // =================================================================
 function getCanvasCoords(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
@@ -2466,10 +2357,10 @@ function safeGameLoop(now) {
       if (elapsed >= 60.0 && elapsed < 300.0) shieldProb = 0.03;
       else if (elapsed >= 300.0) shieldProb = Math.min(0.10, 0.03 * Math.pow(1.10, Math.floor((elapsed - 300.0) / 30.0)));
 
-      // 일반 적 스폰: 60초 이전에는 절대 isHeavy=false 보장
+      // 일반 적 스폰: 절대 isHeavy=false 보장
       enemies.push(new Enemy(calculatedHp, CONFIG.BASE_ENEMY_SPEED + Math.min(1.0, elapsed / 180.0) * 3.5, Math.floor(Math.random() * 4), Math.random() < shieldProb, false));
 
-      // 돌맹이(엘리트): 60초 이전 절대 미출현 & 60초 쿨타임 당 1기 스폰
+      // 돌맹이: 정확히 60초 이후부터 60초 쿨타임 당 1기만 명시적 스폰
       if (elapsed >= 60.0 && elapsed - lastHeavySpawnTime >= 60.0) {
         const currentHeavyCount = enemies.filter(e => e.isHeavy && !e.isDead && e.hp > 0).length;
         if (currentHeavyCount === 0) {
@@ -2547,7 +2438,7 @@ function safeGameLoop(now) {
         }
       }
 
-      // 화면 내부(y >= 20)로 완전히 내려온 적만 플레이어 피격 충돌 허용 (투명 충돌 버그 원천 차단)
+      // 화면 내부(y >= 20)로 완전히 내려온 적만 플레이어 피격 충돌 허용
       if (player && player.isAlive && e.y >= 20 && Math.hypot(player.x - e.x, player.y - e.y) < player.radius + e.radius) {
         if (player.shieldRemain > 0 && !e.hasShield) {
           safeKillEnemy(e);
@@ -2640,7 +2531,7 @@ function safeGameLoop(now) {
     ctx.fillText(`TIME: ${Math.floor(elapsed)}s`, LOGICAL_WIDTH - 20, 45);
     ctx.restore();
 
-    // 1 & 8. 스킬 렙 문자 크기 30% 확대 (10px -> 13px)
+    // 스킬 렙 문자 13px (10px 대비 30% 확대)
     const baseBottomY = LOGICAL_HEIGHT - 12;
     if (player) {
       ctx.font = `bold 13px ${FONT_FAMILY}`;
